@@ -1804,6 +1804,11 @@
                 <span id="headerSaveShortcutLabel">PNG 저장</span>
                 <kbd class="ui-kbd">Ctrl+S</kbd>
               </span>
+              <span class="shortcut-dot">·</span>
+              <span class="shortcut-item">
+                <span>비우기</span>
+                <kbd class="ui-kbd">Del</kbd>
+              </span>
             </div>
 
             <button id="themeToggleBtn" type="button" class="theme-btn" aria-label="테마 전환"></button>
@@ -1828,7 +1833,7 @@
                   <span id="reverseOrderIcon" style="display: inline-flex"></span>
                   <span>순서 반전</span>
                 </button>
-                <button id="resetAllBtn" type="button" class="btn-mini danger" title="모든 이미지 비우기" disabled>
+                <button id="resetAllBtn" type="button" class="btn-mini danger" title="모든 이미지 비우기 (단축키: Delete)" disabled>
                   <svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                     <path d="M3 3v5h5" />
@@ -3958,6 +3963,7 @@
         }
 
         function handleResetAll() {
+          if (state.images.length === 0) return;
           for (var i = 0; i < state.images.length; i += 1) {
             URL.revokeObjectURL(state.images[i].objectUrl);
           }
@@ -3965,7 +3971,13 @@
           state.zoomMode = 'fit';
           state.fileName = '';
           el.fileNameInput.value = '';
+          cropDragState.active = false;
+          cropDragState.pointerId = null;
+          hoveredClipUid = null;
+          state.draggingItemIndex = null;
+          state.dragOverItemIndex = null;
           recomputeAndRender({ rebuildList: true });
+          hideCustomTooltip();
           pushToast('이미지 목록을 비웠습니다.', 'info');
         }
 
@@ -4515,8 +4527,44 @@
           handleCopyClipboard();
         });
 
-        // 단축키: Ctrl+S (선택된 저장 포맷 즉시 다운로드), Ctrl+C (선택된 저장 포맷 클립보드 복사)
+        // 단축키: Delete (모든 이미지 비우기), Ctrl+S (선택된 저장 포맷 즉시 다운로드), Ctrl+C (선택된 저장 포맷 클립보드 복사)
         window.addEventListener('keydown', function (e) {
+          if (e.isComposing) return;
+
+          var isDeleteKey =
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.altKey &&
+            !e.shiftKey &&
+            (e.key === 'Delete' || e.key === 'Del' || e.code === 'Delete');
+
+          if (isDeleteKey) {
+            var isEditableNode = function (node) {
+              if (!node) return false;
+              if (node instanceof HTMLTextAreaElement || node.isContentEditable) return true;
+              if (node instanceof HTMLInputElement) {
+                var type = (node.type || '').toLowerCase();
+                return (
+                  type !== 'button' &&
+                  type !== 'submit' &&
+                  type !== 'reset' &&
+                  type !== 'checkbox' &&
+                  type !== 'radio' &&
+                  type !== 'file' &&
+                  type !== 'color'
+                );
+              }
+              return false;
+            };
+            if (isEditableNode(e.target) || isEditableNode(document.activeElement)) return;
+            if (state.images.length === 0) return;
+
+            e.preventDefault();
+            if (e.repeat) return;
+            handleResetAll();
+            return;
+          }
+
           if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
 
           var keyLower = (e.key || '').toLowerCase();
@@ -4995,4 +5043,3 @@
     </script>
   </body>
 </html>
-
