@@ -686,6 +686,14 @@
         text-overflow: ellipsis;
       }
 
+      .item-top-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        flex-shrink: 0;
+      }
+
+      .btn-replace,
       .btn-remove {
         width: 20px;
         height: 20px;
@@ -698,6 +706,11 @@
         color: var(--text-faint);
         padding: 0;
         flex-shrink: 0;
+      }
+
+      .btn-replace:hover {
+        color: var(--text-main);
+        background-color: var(--panel-muted);
       }
 
       .btn-remove:hover {
@@ -780,6 +793,11 @@
       .btn-tool:hover {
         border-color: var(--btn-hover-border);
         color: var(--text-main);
+      }
+
+      .btn-tool:active {
+        background-color: var(--panel-muted);
+        transform: scale(0.94);
       }
 
       .btn-tool.active {
@@ -1677,6 +1695,7 @@
 
       /* SVG 공통 크기 유틸 */
       .icon-10 { width: 10px; height: 10px; flex-shrink: 0; }
+      .icon-11 { width: 11px; height: 11px; flex-shrink: 0; }
       .icon-12 { width: 12px; height: 12px; flex-shrink: 0; }
       .icon-14 { width: 14px; height: 14px; flex-shrink: 0; }
       .icon-24 { width: 24px; height: 24px; flex-shrink: 0; }
@@ -2326,7 +2345,7 @@
           flipH: '<svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7 5 5-5 5V7"/><path d="m21 7-5 5 5 5V7"/><path d="M12 20v2"/><path d="M12 14v2"/><path d="M12 8v2"/><path d="M12 2v2"/></svg>',
           flipV: '<svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 3-5 5-5-5h10"/><path d="m17 21-5-5-5 5h10"/><path d="M4 12H2"/><path d="M10 12H8"/><path d="M16 12h-2"/><path d="M22 12h-2"/></svg>',
           rotateCw: '<svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>',
-          refresh: '<svg class="icon-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>',
+          refresh: '<svg class="icon-11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>',
           download: '<svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>',
           copy: '<svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
           check: '<svg class="icon-14" style="color:#10b981" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
@@ -3283,6 +3302,19 @@
           el.addZoneBtn.classList.toggle('drag-over', state.isAddZoneDragOver);
         }
 
+        function formatImageTransformTag(img) {
+          var hasFlip = Boolean(img.flipX || img.flipY);
+          var hasRot = img.rotation !== 0;
+          if (!hasFlip && !hasRot) return '';
+          if (hasFlip && hasRot) {
+            return '반전·' + img.rotation + '°';
+          }
+          if (hasFlip) {
+            return img.flipX ? '좌우반전' : '상하반전';
+          }
+          return img.rotation + '°';
+        }
+
         function renderImageList() {
           var count = state.images.length;
           el.imageCountBadge.textContent = count + '장';
@@ -3309,6 +3341,7 @@
             var oriented = getOrientedDimensions(img);
             var isDraggable = count > 1;
             var hasTransform = img.flipX || img.flipY || img.rotation !== 0;
+            var transformTag = formatImageTransformTag(img);
             var transformStyle = hasTransform
               ? ' style="transform: scale(' +
                 (img.flipX ? -1 : 1) +
@@ -3353,11 +3386,18 @@
               escapeHtml(img.name) +
               '</p>' +
               '</div>' +
+              '<div class="item-top-actions">' +
+              '<button type="button" class="btn-replace" data-action="replace" data-index="' +
+              i +
+              '" title="다른 이미지로 교체">' +
+              ICONS.refresh +
+              '</button>' +
               '<button type="button" class="btn-remove" data-action="remove" data-index="' +
               i +
               '" title="이미지 제거">' +
               ICONS.x +
               '</button>' +
+              '</div>' +
               '</div>' +
               '<div class="item-bottom-row">' +
               '<div class="item-meta">' +
@@ -3366,7 +3406,9 @@
               '×' +
               oriented.height.toLocaleString() +
               '</span>' +
-              (img.rotation !== 0 ? '<span class="rot-tag">' + img.rotation + '°</span>' : '') +
+              (transformTag
+                ? '<span class="rot-tag">' + escapeHtml(transformTag) + '</span>'
+                : '') +
               '</div>' +
               '<div class="item-tools">' +
               (count > 1
@@ -3385,35 +3427,20 @@
                   ICONS.chevDown +
                   '</button>'
                 : '') +
-              '<button type="button" class="btn-tool' +
-              (img.flipX ? ' active' : '') +
-              '" data-action="flip-x" data-index="' +
+              '<button type="button" class="btn-tool" data-action="flip-x" data-index="' +
               i +
-              '" title="좌우반전" aria-pressed="' +
-              img.flipX +
-              '">' +
+              '" title="좌우반전">' +
               ICONS.flipH +
               '</button>' +
-              '<button type="button" class="btn-tool' +
-              (img.flipY ? ' active' : '') +
-              '" data-action="flip-y" data-index="' +
+              '<button type="button" class="btn-tool" data-action="flip-y" data-index="' +
               i +
-              '" title="상하반전" aria-pressed="' +
-              img.flipY +
-              '">' +
+              '" title="상하반전">' +
               ICONS.flipV +
               '</button>' +
-              '<button type="button" class="btn-tool' +
-              (img.rotation !== 0 ? ' active' : '') +
-              '" data-action="rotate" data-index="' +
+              '<button type="button" class="btn-tool" data-action="rotate" data-index="' +
               i +
               '" title="90° 시계방향 회전">' +
               ICONS.rotateCw +
-              '</button>' +
-              '<button type="button" class="btn-tool" data-action="replace" data-index="' +
-              i +
-              '" title="다른 이미지로 교체">' +
-              ICONS.refresh +
               '</button>' +
               '</div>' +
               '</div>' +
@@ -3884,6 +3911,16 @@
           recomputeAndRender({ rebuildList: true });
         }
 
+        function normalizeImageTransform(img) {
+          img.rotation = ((img.rotation % 360) + 360) % 360;
+          // 좌우반전 + 상하반전 동시 적용은 180° 회전과 동일하므로 표준형으로 정규화
+          if (img.flipX && img.flipY) {
+            img.flipX = false;
+            img.flipY = false;
+            img.rotation = (img.rotation + 180) % 360;
+          }
+        }
+
         function handleRotateImage(index) {
           var img = state.images[index];
           if (!img) return;
@@ -3892,6 +3929,7 @@
           img.rotation = (img.rotation + 90) % 360;
           img.flipX = img.flipY;
           img.flipY = prevFlipX;
+          normalizeImageTransform(img);
           img.cropPosX = null;
           img.cropPosY = null;
           recomputeAndRender({ rebuildList: true });
@@ -3901,6 +3939,7 @@
           var img = state.images[index];
           if (!img) return;
           img.flipX = !img.flipX;
+          normalizeImageTransform(img);
           if (typeof img.cropPosX === 'number') {
             img.cropPosX = 1 - img.cropPosX;
           }
@@ -3911,6 +3950,7 @@
           var img = state.images[index];
           if (!img) return;
           img.flipY = !img.flipY;
+          normalizeImageTransform(img);
           if (typeof img.cropPosY === 'number') {
             img.cropPosY = 1 - img.cropPosY;
           }
@@ -4142,6 +4182,10 @@
         }
 
         el.imageList.addEventListener('dragstart', function (e) {
+          if (e.target && e.target.closest && e.target.closest('button')) {
+            e.preventDefault();
+            return;
+          }
           var card = e.target.closest('.image-item[data-item-index]');
           if (!card || state.images.length <= 1) return;
           var idx = Number(card.getAttribute('data-item-index'));
