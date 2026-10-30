@@ -2319,7 +2319,6 @@
           var contentWidth = 0;
           var contentHeight = 0;
 
-          if (options.direction === 'horizontal') {
           if (ratioSpec) {
             var rw = ratioSpec.rw;
             var rh = ratioSpec.rh;
@@ -3036,7 +3035,6 @@
           el.fitModeHint.textContent =
             state.fitMode === 'cover' ? '여백 없이 꽉 채움' : '잘림 없이 전체 표시';
 
-          var showAlign = state.sizeMode === 'original' || state.direction === 'grid';
           var showAlign =
             state.aspectRatio !== 'auto' ||
             state.sizeMode === 'original' ||
@@ -3046,11 +3044,6 @@
             state.fitMode === 'cover' ? '잘라내기 기준' : '크기 차이 정렬';
 
           var isVerticalAxisAlign =
-            state.direction === 'horizontal'
-              ? state.fitMode !== 'cover'
-              : state.direction === 'vertical'
-                ? state.fitMode === 'cover'
-                : null;
             state.aspectRatio !== 'auto' || state.direction === 'grid'
               ? null
               : state.direction === 'horizontal'
