@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IMG MERGE — 무손실 이미지 합치기</title>
+    <title>SL109 :: IMG MERGE</title>
     <link
       rel="icon"
       type="image/svg+xml"
@@ -584,9 +584,6 @@
         display: flex;
         flex-direction: column;
         gap: 6px;
-        max-height: 260px;
-        overflow-y: auto;
-        padding-right: 2px;
       }
 
       .image-item {
@@ -855,6 +852,16 @@
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 4px;
+      }
+
+      .grid-5 {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 4px;
+      }
+
+      .grid-5 .seg-btn {
+        padding: 0 4px;
       }
 
       .seg-btn {
@@ -1543,12 +1550,12 @@
               </span>
               <span class="shortcut-dot">·</span>
               <span class="shortcut-item">
-                <span>복사</span>
+                <span id="headerCopyShortcutLabel">PNG 복사</span>
                 <kbd class="ui-kbd">Ctrl+C</kbd>
               </span>
               <span class="shortcut-dot">·</span>
               <span class="shortcut-item">
-                <span>PNG 저장</span>
+                <span id="headerSaveShortcutLabel">PNG 저장</span>
                 <kbd class="ui-kbd">Ctrl+S</kbd>
               </span>
             </div>
@@ -1669,9 +1676,73 @@
                   1번 이미지에 맞춤
                 </button>
               </div>
+            </div>
+
+            <!-- 칸 비율 설정 -->
+            <div class="field-group">
+              <div class="row-between">
+                <label class="field-label">칸 비율</label>
+                <span id="aspectRatioHint" class="field-hint">각 이미지 비율 유지</span>
+              </div>
+
+              <div id="aspectRatioGroup" class="grid-5">
+                <button type="button" data-aspect="auto" class="seg-btn bold active" title="각 이미지의 원래 비율 유지">
+                  원본
+                </button>
+                <button type="button" data-aspect="1:1" class="seg-btn bold font-mono" title="모든 칸을 1:1 정사각형으로 통일">
+                  1:1
+                </button>
+                <button type="button" data-aspect="4:3" class="seg-btn bold font-mono" title="모든 칸을 4:3 가로 비율로 통일">
+                  4:3
+                </button>
+                <button type="button" data-aspect="3:4" class="seg-btn bold font-mono" title="모든 칸을 3:4 세로 비율로 통일">
+                  3:4
+                </button>
+                <button type="button" data-aspect="16:9" class="seg-btn bold font-mono" title="모든 칸을 16:9 와이드 비율로 통일">
+                  16:9
+                </button>
+              </div>
+            </div>
+
+            <!-- 영역 채우기 방식 (Contain / Cover) -->
+            <div class="field-group">
+              <div class="row-between">
+                <label class="field-label">영역 채우기</label>
+                <span id="fitModeHint" class="field-hint">잘림 없이 전체 표시</span>
+              </div>
+
+              <div id="fitModeGroup" class="grid-2">
+                <button
+                  type="button"
+                  data-fit="contain"
+                  class="seg-btn bold active"
+                  title="이미지가 잘리지 않도록 칸 안에 전체 표시 (Contain)"
+                >
+                  <svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="18" height="18" x="3" y="3" rx="2" />
+                    <rect width="10" height="6" x="7" y="9" rx="1" />
+                  </svg>
+                  <span>비율 맞춤 (Contain)</span>
+                </button>
+                <button
+                  type="button"
+                  data-fit="cover"
+                  class="seg-btn bold"
+                  title="빈 여백 없이 칸에 꽉 채우고 넘치는 부분 잘라냄 (Cover)"
+                >
+                  <svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                    <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                    <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                    <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                    <rect width="10" height="10" x="7" y="7" rx="1" />
+                  </svg>
+                  <span>꽉 채우기 (Cover)</span>
+                </button>
+              </div>
 
               <div id="alignRow" class="sub-option-row">
-                <span class="sub-option-label">크기 차이 정렬</span>
+                <span id="alignRowLabel" class="sub-option-label">크기 차이 정렬</span>
                 <div id="alignGroup" class="pill-group">
                   <button type="button" data-align="start" class="pill-btn">상단</button>
                   <button type="button" data-align="center" class="pill-btn active">중앙</button>
@@ -1787,7 +1858,7 @@
                 id="downloadBtn"
                 type="button"
                 class="btn-download"
-                title="단축키: Ctrl + S (무손실 PNG 바로 다운로드)"
+                title="단축키: Ctrl + S (PNG 바로 다운로드)"
                 disabled
               >
                 <span id="downloadBtnIcon" style="display: inline-flex"></span>
@@ -1799,7 +1870,7 @@
                 id="copyBtn"
                 type="button"
                 class="btn-copy"
-                title="단축키: Ctrl + C (무손실 PNG 클립보드 복사)"
+                title="단축키: Ctrl + C (PNG 클립보드 복사)"
                 disabled
               >
                 <span id="copyBtnIcon" style="display: inline-flex"></span>
@@ -1967,6 +2038,8 @@
           direction: 'horizontal',
           gridCols: 2,
           sizeMode: 'original',
+          aspectRatio: 'auto',
+          fitMode: 'contain',
           align: 'center',
           gap: 0,
           padding: 0,
@@ -2000,6 +2073,8 @@
           multiInput: document.getElementById('multiInput'),
           replaceInput: document.getElementById('replaceInput'),
           windowDropOverlay: document.getElementById('windowDropOverlay'),
+          headerCopyShortcutLabel: document.getElementById('headerCopyShortcutLabel'),
+          headerSaveShortcutLabel: document.getElementById('headerSaveShortcutLabel'),
           themeToggleBtn: document.getElementById('themeToggleBtn'),
           imageCountBadge: document.getElementById('imageCountBadge'),
           reverseOrderBtn: document.getElementById('reverseOrderBtn'),
@@ -2013,7 +2088,12 @@
           gridColsRow: document.getElementById('gridColsRow'),
           gridColsGroup: document.getElementById('gridColsGroup'),
           sizeModeGroup: document.getElementById('sizeModeGroup'),
+          aspectRatioGroup: document.getElementById('aspectRatioGroup'),
+          aspectRatioHint: document.getElementById('aspectRatioHint'),
+          fitModeGroup: document.getElementById('fitModeGroup'),
+          fitModeHint: document.getElementById('fitModeHint'),
           alignRow: document.getElementById('alignRow'),
+          alignRowLabel: document.getElementById('alignRowLabel'),
           alignGroup: document.getElementById('alignGroup'),
           gapPresets: document.getElementById('gapPresets'),
           gapInput: document.getElementById('gapInput'),
@@ -2140,10 +2220,87 @@
         }
 
         function computeAlignOffset(containerSpan, itemSpan, align) {
-          var diff = Math.max(0, containerSpan - itemSpan);
-          if (align === 'start') return 0;
+          var diff = containerSpan - itemSpan;
+          if (diff === 0 || align === 'start') return 0;
           if (align === 'end') return diff;
-          return Math.floor(diff / 2); // 정수 좌표 유지로 0.5px 서브픽셀 블러 원천 방지
+          // 정수 좌표 유지로 0.5px 서브픽셀 블러 원천 방지 (음수 오프셋에서도 대칭 유지)
+          return diff > 0 ? Math.floor(diff / 2) : -Math.floor(-diff / 2);
+        }
+
+        function buildSlotPlacement(params) {
+          var img = params.img;
+          var srcW = params.srcW;
+          var srcH = params.srcH;
+          var fitW = params.fitW;
+          var fitH = params.fitH;
+          var isFitScaled = params.isFitScaled;
+          var slotX = params.slotX;
+          var slotY = params.slotY;
+          var slotW = params.slotW;
+          var slotH = params.slotH;
+          var fitMode = params.fitMode;
+          var align = params.align;
+
+          if (fitMode === 'cover') {
+            var coverW;
+            var coverH;
+            if (srcW === slotW && srcH === slotH) {
+              coverW = slotW;
+              coverH = slotH;
+            } else if (srcW * slotH >= srcH * slotW) {
+              coverH = slotH;
+              coverW = Math.max(slotW, Math.round((srcW * slotH) / srcH));
+            } else {
+              coverW = slotW;
+              coverH = Math.max(slotH, Math.round((srcH * slotW) / srcW));
+            }
+
+            return {
+              uid: img.uid,
+              element: img.element,
+              rotation: img.rotation,
+              flipX: img.flipX,
+              flipY: img.flipY,
+              x: slotX + computeAlignOffset(slotW, coverW, align),
+              y: slotY + computeAlignOffset(slotH, coverH, align),
+              drawW: coverW,
+              drawH: coverH,
+              isScaled: coverW !== srcW || coverH !== srcH,
+              hasClip: coverW > slotW || coverH > slotH,
+              clipX: slotX,
+              clipY: slotY,
+              clipW: slotW,
+              clipH: slotH
+            };
+          }
+
+          return {
+            uid: img.uid,
+            element: img.element,
+            rotation: img.rotation,
+            flipX: img.flipX,
+            flipY: img.flipY,
+            x: slotX + computeAlignOffset(slotW, fitW, align),
+            y: slotY + computeAlignOffset(slotH, fitH, align),
+            drawW: fitW,
+            drawH: fitH,
+            isScaled: isFitScaled,
+            hasClip: false,
+            clipX: slotX,
+            clipY: slotY,
+            clipW: slotW,
+            clipH: slotH
+          };
+        }
+
+        function parseAspectRatioSpec(aspectRatio) {
+          if (!aspectRatio || aspectRatio === 'auto') return null;
+          var parts = String(aspectRatio).split(':');
+          if (parts.length !== 2) return null;
+          var rw = Number(parts[0]);
+          var rh = Number(parts[1]);
+          if (!Number.isFinite(rw) || !Number.isFinite(rh) || rw <= 0 || rh <= 0) return null;
+          return { rw: rw, rh: rh };
         }
 
         function computeMergePlan(images, options) {
@@ -2151,6 +2308,8 @@
 
           var gap = Math.max(0, Math.round(options.gap));
           var padding = Math.max(0, Math.round(options.padding));
+          var fitMode = options.fitMode === 'cover' ? 'cover' : 'contain';
+          var ratioSpec = parseAspectRatioSpec(options.aspectRatio);
           var oriented = images.map(function (img) {
             var dim = getOrientedDimensions(img);
             return { img: img, width: dim.width, height: dim.height };
@@ -2161,6 +2320,142 @@
           var contentHeight = 0;
 
           if (options.direction === 'horizontal') {
+          if (ratioSpec) {
+            var rw = ratioSpec.rw;
+            var rh = ratioSpec.rh;
+            var unitWidths = oriented.map(function (o) {
+              return Math.max(o.width, Math.round((o.height * rw) / rh));
+            });
+
+            var baseCellW;
+            if (options.sizeMode === 'fit-smallest') {
+              baseCellW = Math.min.apply(null, unitWidths);
+            } else if (options.sizeMode === 'fit-first') {
+              baseCellW = unitWidths[0];
+            } else {
+              baseCellW = Math.max.apply(null, unitWidths);
+            }
+
+            var cellW = Math.max(1, Math.round(baseCellW));
+            var cellH = Math.max(1, Math.round((cellW * rh) / rw));
+
+            if (options.sizeMode === 'original') {
+              var maxRawW = Math.max.apply(null, oriented.map(function (o) { return o.width; }));
+              var maxRawH = Math.max.apply(null, oriented.map(function (o) { return o.height; }));
+              if (cellH < maxRawH) {
+                cellH = maxRawH;
+                cellW = Math.max(cellW, Math.round((cellH * rw) / rh));
+              }
+              if (cellW < maxRawW) {
+                cellW = maxRawW;
+                cellH = Math.max(cellH, Math.round((cellW * rh) / rw));
+              }
+            }
+
+            var sizedFixed = oriented.map(function (o) {
+              if (options.sizeMode === 'original' || (o.width === cellW && o.height === cellH)) {
+                return {
+                  img: o.img,
+                  srcW: o.width,
+                  srcH: o.height,
+                  drawW: o.width,
+                  drawH: o.height,
+                  isScaled: false
+                };
+              }
+              var fitW;
+              var fitH;
+              if (o.width * cellH >= o.height * cellW) {
+                fitW = cellW;
+                fitH = Math.min(cellH, Math.max(1, Math.round((o.height * cellW) / o.width)));
+              } else {
+                fitH = cellH;
+                fitW = Math.min(cellW, Math.max(1, Math.round((o.width * cellH) / o.height)));
+              }
+              return {
+                img: o.img,
+                srcW: o.width,
+                srcH: o.height,
+                drawW: fitW,
+                drawH: fitH,
+                isScaled: fitW !== o.width || fitH !== o.height
+              };
+            });
+
+            if (options.direction === 'horizontal') {
+              contentWidth =
+                cellW * sizedFixed.length + gap * Math.max(0, sizedFixed.length - 1);
+              contentHeight = cellH;
+              for (var fi = 0; fi < sizedFixed.length; fi += 1) {
+                var sfH = sizedFixed[fi];
+                placements.push(
+                  buildSlotPlacement({
+                    img: sfH.img,
+                    srcW: sfH.srcW,
+                    srcH: sfH.srcH,
+                    fitW: sfH.drawW,
+                    fitH: sfH.drawH,
+                    isFitScaled: sfH.isScaled,
+                    slotX: padding + fi * (cellW + gap),
+                    slotY: padding,
+                    slotW: cellW,
+                    slotH: cellH,
+                    fitMode: fitMode,
+                    align: options.align
+                  })
+                );
+              }
+            } else if (options.direction === 'vertical') {
+              contentWidth = cellW;
+              contentHeight =
+                cellH * sizedFixed.length + gap * Math.max(0, sizedFixed.length - 1);
+              for (var fj = 0; fj < sizedFixed.length; fj += 1) {
+                var sfV = sizedFixed[fj];
+                placements.push(
+                  buildSlotPlacement({
+                    img: sfV.img,
+                    srcW: sfV.srcW,
+                    srcH: sfV.srcH,
+                    fitW: sfV.drawW,
+                    fitH: sfV.drawH,
+                    isFitScaled: sfV.isScaled,
+                    slotX: padding,
+                    slotY: padding + fj * (cellH + gap),
+                    slotW: cellW,
+                    slotH: cellH,
+                    fitMode: fitMode,
+                    align: options.align
+                  })
+                );
+              }
+            } else {
+              var fixedCols = Math.max(1, Math.min(Math.max(2, options.gridCols), sizedFixed.length));
+              var fixedRows = Math.ceil(sizedFixed.length / fixedCols);
+              contentWidth = cellW * fixedCols + gap * Math.max(0, fixedCols - 1);
+              contentHeight = cellH * fixedRows + gap * Math.max(0, fixedRows - 1);
+
+              sizedFixed.forEach(function (sfG, idx) {
+                var fRow = Math.floor(idx / fixedCols);
+                var fCol = idx % fixedCols;
+                placements.push(
+                  buildSlotPlacement({
+                    img: sfG.img,
+                    srcW: sfG.srcW,
+                    srcH: sfG.srcH,
+                    fitW: sfG.drawW,
+                    fitH: sfG.drawH,
+                    isFitScaled: sfG.isScaled,
+                    slotX: padding + fCol * (cellW + gap),
+                    slotY: padding + fRow * (cellH + gap),
+                    slotW: cellW,
+                    slotH: cellH,
+                    fitMode: fitMode,
+                    align: options.align
+                  })
+                );
+              });
+            }
+          } else if (options.direction === 'horizontal') {
             var targetHeight = null;
             if (options.sizeMode === 'fit-largest') {
               targetHeight = Math.max.apply(null, oriented.map(function (o) { return o.height; }));
@@ -2172,11 +2467,20 @@
 
             var sizedH = oriented.map(function (o) {
               if (targetHeight === null || o.height === targetHeight) {
-                return { img: o.img, drawW: o.width, drawH: o.height, isScaled: false };
+                return {
+                  img: o.img,
+                  srcW: o.width,
+                  srcH: o.height,
+                  drawW: o.width,
+                  drawH: o.height,
+                  isScaled: false
+                };
               }
               var scale = targetHeight / o.height;
               return {
                 img: o.img,
+                srcW: o.width,
+                srcH: o.height,
                 drawW: Math.max(1, Math.round(o.width * scale)),
                 drawH: targetHeight,
                 isScaled: true
@@ -2191,19 +2495,22 @@
             var cursorX = padding;
             for (var i = 0; i < sizedH.length; i += 1) {
               var sh = sizedH[i];
-              var yh = padding + computeAlignOffset(contentHeight, sh.drawH, options.align);
-              placements.push({
-                uid: sh.img.uid,
-                element: sh.img.element,
-                rotation: sh.img.rotation,
-                flipX: sh.img.flipX,
-                flipY: sh.img.flipY,
-                x: cursorX,
-                y: yh,
-                drawW: sh.drawW,
-                drawH: sh.drawH,
-                isScaled: sh.isScaled
-              });
+              placements.push(
+                buildSlotPlacement({
+                  img: sh.img,
+                  srcW: sh.srcW,
+                  srcH: sh.srcH,
+                  fitW: sh.drawW,
+                  fitH: sh.drawH,
+                  isFitScaled: sh.isScaled,
+                  slotX: cursorX,
+                  slotY: padding,
+                  slotW: sh.drawW,
+                  slotH: contentHeight,
+                  fitMode: fitMode,
+                  align: options.align
+                })
+              );
               cursorX += sh.drawW + gap;
             }
           } else if (options.direction === 'vertical') {
@@ -2218,11 +2525,20 @@
 
             var sizedV = oriented.map(function (o) {
               if (targetWidth === null || o.width === targetWidth) {
-                return { img: o.img, drawW: o.width, drawH: o.height, isScaled: false };
+                return {
+                  img: o.img,
+                  srcW: o.width,
+                  srcH: o.height,
+                  drawW: o.width,
+                  drawH: o.height,
+                  isScaled: false
+                };
               }
               var scale = targetWidth / o.width;
               return {
                 img: o.img,
+                srcW: o.width,
+                srcH: o.height,
                 drawW: targetWidth,
                 drawH: Math.max(1, Math.round(o.height * scale)),
                 isScaled: true
@@ -2237,19 +2553,22 @@
             var cursorY = padding;
             for (var j = 0; j < sizedV.length; j += 1) {
               var sv = sizedV[j];
-              var xv = padding + computeAlignOffset(contentWidth, sv.drawW, options.align);
-              placements.push({
-                uid: sv.img.uid,
-                element: sv.img.element,
-                rotation: sv.img.rotation,
-                flipX: sv.img.flipX,
-                flipY: sv.img.flipY,
-                x: xv,
-                y: cursorY,
-                drawW: sv.drawW,
-                drawH: sv.drawH,
-                isScaled: sv.isScaled
-              });
+              placements.push(
+                buildSlotPlacement({
+                  img: sv.img,
+                  srcW: sv.srcW,
+                  srcH: sv.srcH,
+                  fitW: sv.drawW,
+                  fitH: sv.drawH,
+                  isFitScaled: sv.isScaled,
+                  slotX: padding,
+                  slotY: cursorY,
+                  slotW: contentWidth,
+                  slotH: sv.drawH,
+                  fitMode: fitMode,
+                  align: options.align
+                })
+              );
               cursorY += sv.drawH + gap;
             }
           } else {
@@ -2266,11 +2585,20 @@
 
             var sizedG = oriented.map(function (o) {
               if (targetGridWidth === null || o.width === targetGridWidth) {
-                return { img: o.img, drawW: o.width, drawH: o.height, isScaled: false };
+                return {
+                  img: o.img,
+                  srcW: o.width,
+                  srcH: o.height,
+                  drawW: o.width,
+                  drawH: o.height,
+                  isScaled: false
+                };
               }
               var scale = targetGridWidth / o.width;
               return {
                 img: o.img,
+                srcW: o.width,
+                srcH: o.height,
                 drawW: targetGridWidth,
                 drawH: Math.max(1, Math.round(o.height * scale)),
                 isScaled: true
@@ -2312,20 +2640,22 @@
             sizedG.forEach(function (s, idx) {
               var row = Math.floor(idx / effectiveCols);
               var col = idx % effectiveCols;
-              var xg = colOffsets[col] + computeAlignOffset(colWidths[col], s.drawW, options.align);
-              var yg = rowOffsets[row] + computeAlignOffset(rowHeights[row], s.drawH, options.align);
-              placements.push({
-                uid: s.img.uid,
-                element: s.img.element,
-                rotation: s.img.rotation,
-                flipX: s.img.flipX,
-                flipY: s.img.flipY,
-                x: xg,
-                y: yg,
-                drawW: s.drawW,
-                drawH: s.drawH,
-                isScaled: s.isScaled
-              });
+              placements.push(
+                buildSlotPlacement({
+                  img: s.img,
+                  srcW: s.srcW,
+                  srcH: s.srcH,
+                  fitW: s.drawW,
+                  fitH: s.drawH,
+                  isFitScaled: s.isScaled,
+                  slotX: colOffsets[col],
+                  slotY: rowOffsets[row],
+                  slotW: colWidths[col],
+                  slotH: rowHeights[row],
+                  fitMode: fitMode,
+                  align: options.align
+                })
+              );
             });
           }
 
@@ -2372,13 +2702,18 @@
             ctx.imageSmoothingEnabled = false;
           }
 
-          if (p.rotation === 0 && !p.flipX && !p.flipY) {
+          if (!p.hasClip && p.rotation === 0 && !p.flipX && !p.flipY) {
             ctx.drawImage(p.element, p.x, p.y, p.drawW, p.drawH);
             return;
           }
 
           // 삼각함수 부동소수점 오차 없이 정수 행렬로 정확히 좌우/상하 반전 및 90°/180°/270° 회전 렌더링
           ctx.save();
+          if (p.hasClip) {
+            ctx.beginPath();
+            ctx.rect(p.clipX, p.clipY, p.clipW, p.clipH);
+            ctx.clip();
+          }
           ctx.translate(p.flipX ? p.x + p.drawW : p.x, p.flipY ? p.y + p.drawH : p.y);
           ctx.scale(p.flipX ? -1 : 1, p.flipY ? -1 : 1);
 
@@ -2434,6 +2769,18 @@
               quality
             );
           });
+        }
+
+        function getFormatLabel(format) {
+          if (format === 'jpeg') return 'JPG';
+          if (format === 'webp') return 'WebP';
+          return 'PNG';
+        }
+
+        function getFormatMime(format) {
+          if (format === 'jpeg') return 'image/jpeg';
+          if (format === 'webp') return 'image/webp';
+          return 'image/png';
         }
 
         function getEffectiveBgColor(forFormat) {
@@ -2674,27 +3021,51 @@
           setGroupActive(el.gridColsGroup, 'data-cols', state.gridCols);
 
           setGroupActive(el.sizeModeGroup, 'data-size', state.sizeMode);
+          setGroupActive(el.aspectRatioGroup, 'data-aspect', state.aspectRatio);
+          var aspectHints = {
+            auto: '각 이미지 비율 유지',
+            '1:1': '모든 칸 정사각형 통일',
+            '4:3': '모든 칸 4:3 가로형 통일',
+            '3:4': '모든 칸 3:4 세로형 통일',
+            '16:9': '모든 칸 16:9 와이드 통일'
+          };
+          el.aspectRatioHint.textContent =
+            aspectHints[state.aspectRatio] || '각 이미지 비율 유지';
+
+          setGroupActive(el.fitModeGroup, 'data-fit', state.fitMode);
+          el.fitModeHint.textContent =
+            state.fitMode === 'cover' ? '여백 없이 꽉 채움' : '잘림 없이 전체 표시';
 
           var showAlign = state.sizeMode === 'original' || state.direction === 'grid';
+          var showAlign =
+            state.aspectRatio !== 'auto' ||
+            state.sizeMode === 'original' ||
+            state.direction === 'grid';
           el.alignRow.classList.toggle('hidden', !showAlign);
+          el.alignRowLabel.textContent =
+            state.fitMode === 'cover' ? '잘라내기 기준' : '크기 차이 정렬';
+
+          var isVerticalAxisAlign =
+            state.direction === 'horizontal'
+              ? state.fitMode !== 'cover'
+              : state.direction === 'vertical'
+                ? state.fitMode === 'cover'
+                : null;
+            state.aspectRatio !== 'auto' || state.direction === 'grid'
+              ? null
+              : state.direction === 'horizontal'
+                ? state.fitMode !== 'cover'
+                : state.fitMode === 'cover';
 
           var alignButtons = el.alignGroup.querySelectorAll('[data-align]');
           for (var i = 0; i < alignButtons.length; i += 1) {
             var key = alignButtons[i].getAttribute('data-align');
             if (key === 'start') {
               alignButtons[i].textContent =
-                state.direction === 'horizontal'
-                  ? '상단'
-                  : state.direction === 'vertical'
-                    ? '좌측'
-                    : '시작';
+                isVerticalAxisAlign === null ? '시작' : isVerticalAxisAlign ? '상단' : '좌측';
             } else if (key === 'end') {
               alignButtons[i].textContent =
-                state.direction === 'horizontal'
-                  ? '하단'
-                  : state.direction === 'vertical'
-                    ? '우측'
-                    : '끝';
+                isVerticalAxisAlign === null ? '끝' : isVerticalAxisAlign ? '하단' : '우측';
             }
             alignButtons[i].classList.toggle('active', key === state.align);
           }
@@ -2756,21 +3127,31 @@
             }
           }
 
+          var fmtLabel = getFormatLabel(state.exportFormat);
+          if (el.headerCopyShortcutLabel) {
+            el.headerCopyShortcutLabel.textContent = fmtLabel + ' 복사';
+          }
+          if (el.headerSaveShortcutLabel) {
+            el.headerSaveShortcutLabel.textContent = fmtLabel + ' 저장';
+          }
+
           var canExport = Boolean(plan && !plan.exceedsLimit);
           el.downloadBtn.disabled = !canExport || state.downloading;
+          el.downloadBtn.title = '단축키: Ctrl + S (' + fmtLabel + ' 바로 다운로드)';
           el.downloadBtnIcon.innerHTML = state.downloading ? ICONS.loader : ICONS.download;
           el.downloadBtnText.textContent = state.downloading
             ? '생성 중...'
-            : (state.exportFormat === 'jpeg' ? 'JPG' : state.exportFormat.toUpperCase()) + ' 저장';
+            : fmtLabel + ' 저장';
           el.downloadBtnKbd.classList.toggle('hidden', state.downloading);
 
           el.copyBtn.disabled = !canExport || state.copying;
+          el.copyBtn.title = '단축키: Ctrl + C (' + fmtLabel + ' 클립보드 복사)';
           el.copyBtnIcon.innerHTML = state.copying
             ? ICONS.loader
             : state.copiedRecently
               ? ICONS.check
               : ICONS.copy;
-          el.copyBtnText.textContent = state.copiedRecently ? '복사됨!' : 'PNG 복사';
+          el.copyBtnText.textContent = state.copiedRecently ? '복사됨!' : fmtLabel + ' 복사';
           el.copyBtnKbd.classList.toggle('hidden', state.copying || state.copiedRecently);
         }
 
@@ -2866,6 +3247,8 @@
             direction: state.direction,
             gridCols: state.gridCols,
             sizeMode: state.sizeMode,
+            aspectRatio: state.aspectRatio,
+            fitMode: state.fitMode,
             align: state.align,
             gap: state.gap,
             padding: state.padding
@@ -2980,7 +3363,7 @@
           pushToast('이미지 목록을 비웠습니다.', 'info');
         }
 
-        async function buildMergedBlob(format) {
+        async function buildMergedBlob(format, encodeMimeOverride) {
           var plan = state.mergePlan;
           if (!plan) {
             throw new Error('합칠 이미지를 먼저 추가해 주세요.');
@@ -2993,9 +3376,8 @@
           var bg = getEffectiveBgColor(format);
           renderPlanToCanvas(offscreen, plan, bg);
 
-          var mime =
-            format === 'png' ? 'image/png' : format === 'webp' ? 'image/webp' : 'image/jpeg';
-          var quality = format === 'png' ? undefined : 1.0;
+          var mime = encodeMimeOverride || getFormatMime(format);
+          var quality = mime === 'image/png' ? undefined : 1.0;
 
           var blob = await canvasToBlobAsync(offscreen, mime, quality);
           // 메모리 즉시 반환 유도
@@ -3052,7 +3434,22 @@
           }
         }
 
-        async function handleCopyClipboard() {
+        async function writeBlobToClipboard(mimeType, blobPromise) {
+          var itemMap = {};
+          itemMap[mimeType] = blobPromise;
+          try {
+            // Safari 등 사용자 제스처 컨텍스트 유지를 위해 Promise<Blob> 우선 전달
+            await navigator.clipboard.write([new ClipboardItem(itemMap)]);
+          } catch (firstErr) {
+            // Promise<Blob> 미지원 브라우저 폴백
+            var resolvedBlob = await blobPromise;
+            var resolvedMap = {};
+            resolvedMap[mimeType] = resolvedBlob;
+            await navigator.clipboard.write([new ClipboardItem(resolvedMap)]);
+          }
+        }
+
+        async function handleCopyClipboard(overrideFormat) {
           var plan = state.mergePlan;
           if (!plan || plan.exceedsLimit || state.copying) return;
 
@@ -3065,22 +3462,29 @@
             return;
           }
 
+          var targetFormat = overrideFormat || state.exportFormat;
+          var targetMime = getFormatMime(targetFormat);
+          var fmtLabel = getFormatLabel(targetFormat);
+          var canWriteTargetMime =
+            targetMime === 'image/png' ||
+            (typeof ClipboardItem.supports === 'function'
+              ? ClipboardItem.supports(targetMime)
+              : true);
+
           state.copying = true;
           syncExportActionsUI();
 
           try {
-            var pngBlobPromise = buildMergedBlob('png');
-            try {
-              // Safari 등 사용자 제스처 컨텍스트 유지를 위해 Promise<Blob> 우선 전달
-              await navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': pngBlobPromise })
-              ]);
-            } catch (_) {
-              // Promise<Blob> 미지원 브라우저 폴백
-              var resolvedBlob = await pngBlobPromise;
-              await navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': resolvedBlob })
-              ]);
+            if (canWriteTargetMime) {
+              try {
+                await writeBlobToClipboard(targetMime, buildMergedBlob(targetFormat));
+              } catch (mimeErr) {
+                if (targetMime === 'image/png') throw mimeErr;
+                // 브라우저 클립보드가 image/png 컨테이너만 허용하는 경우 선택 포맷 렌더링(배경 등)을 유지한 채 폴백
+                await writeBlobToClipboard('image/png', buildMergedBlob(targetFormat, 'image/png'));
+              }
+            } else {
+              await writeBlobToClipboard('image/png', buildMergedBlob(targetFormat, 'image/png'));
             }
 
             state.copiedRecently = true;
@@ -3090,7 +3494,7 @@
               syncExportActionsUI();
             }, 2000);
 
-            pushToast('무손실 PNG 이미지가 클립보드에 복사되었습니다.', 'success');
+            pushToast(fmtLabel + ' 이미지가 클립보드에 복사되었습니다.', 'success');
           } catch (err) {
             pushToast((err && err.message) || '클립보드 복사에 실패했습니다.', 'error');
           } finally {
@@ -3363,6 +3767,26 @@
           }
         });
 
+        el.aspectRatioGroup.addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-aspect]');
+          if (!btn) return;
+          var aspect = btn.getAttribute('data-aspect');
+          if (aspect && aspect !== state.aspectRatio) {
+            state.aspectRatio = aspect;
+            recomputeAndRender();
+          }
+        });
+
+        el.fitModeGroup.addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-fit]');
+          if (!btn) return;
+          var fit = btn.getAttribute('data-fit');
+          if (fit && fit !== state.fitMode) {
+            state.fitMode = fit;
+            recomputeAndRender();
+          }
+        });
+
         el.alignGroup.addEventListener('click', function (e) {
           var btn = e.target.closest('[data-align]');
           if (!btn) return;
@@ -3466,7 +3890,7 @@
           handleCopyClipboard();
         });
 
-        // 단축키: Ctrl+S (무손실 PNG 즉시 다운로드), Ctrl+C (무손실 PNG 클립보드 복사)
+        // 단축키: Ctrl+S (선택된 저장 포맷 즉시 다운로드), Ctrl+C (선택된 저장 포맷 클립보드 복사)
         window.addEventListener('keydown', function (e) {
           if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
 
@@ -3488,7 +3912,7 @@
               );
               return;
             }
-            handleDownload('png');
+            handleDownload();
             return;
           }
 
