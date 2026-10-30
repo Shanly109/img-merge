@@ -899,6 +899,100 @@
         color: var(--primary-text);
       }
 
+      /* 배치 방식 2가지 탭 모드 & 서브 패널 */
+      .mode-tabs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 3px;
+        padding: 3px;
+        border-radius: 8px;
+        background-color: var(--panel-muted);
+        border: 1px solid var(--panel-border);
+      }
+
+      .mode-tab-btn {
+        height: 28px;
+        padding: 0 8px;
+        border-radius: 6px;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        white-space: nowrap;
+      }
+
+      .mode-tab-btn:hover {
+        color: var(--text-main);
+      }
+
+      .mode-tab-btn.active {
+        background-color: var(--primary-bg);
+        color: var(--primary-text);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+      }
+
+      .mode-subpanel {
+        margin-top: 2px;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid var(--panel-border);
+        background-color: var(--panel-subtle);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .mode-subpanel .seg-btn {
+        background-color: var(--btn-bg);
+      }
+
+      .mode-subpanel .seg-btn.active {
+        background-color: var(--primary-bg);
+      }
+
+      .mode-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .original-mode-note {
+        margin: 0;
+        font-size: 10.5px;
+        line-height: 1.4;
+        color: var(--text-muted);
+      }
+
+      .crop-guide-box {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        background-color: rgba(59, 130, 246, 0.08);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+        color: #1d4ed8;
+        font-size: 10.5px;
+        font-weight: 600;
+        line-height: 1.38;
+      }
+
+      .crop-guide-box svg {
+        margin-top: 1px;
+        flex-shrink: 0;
+      }
+
+      html.dark .crop-guide-box {
+        background-color: rgba(59, 130, 246, 0.14);
+        border-color: rgba(96, 165, 250, 0.3);
+        color: #93c5fd;
+      }
+
       .sub-option-row {
         padding-top: 4px;
         display: flex;
@@ -1202,6 +1296,25 @@
         color: #fbbf24;
       }
 
+      .crop-toolbar-hint {
+        display: none;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        background-color: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+        color: #1d4ed8;
+        font-size: 10.5px;
+        font-weight: 600;
+      }
+
+      html.dark .crop-toolbar-hint {
+        background-color: rgba(59, 130, 246, 0.16);
+        border-color: rgba(96, 165, 250, 0.3);
+        color: #93c5fd;
+      }
+
       .preview-controls {
         display: flex;
         align-items: center;
@@ -1399,6 +1512,7 @@
 
       .canvas-holder {
         margin: auto;
+        position: relative;
       }
 
       #previewCanvas {
@@ -1411,6 +1525,34 @@
 
       html.dark #previewCanvas {
         outline: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      .crop-slot-highlight {
+        position: absolute;
+        pointer-events: none;
+        border: 2px solid rgba(59, 130, 246, 0.92);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+        z-index: 5;
+      }
+
+      .crop-slot-highlight.dragging {
+        border-color: #10b981;
+      }
+
+      .crop-slot-badge {
+        position: absolute;
+        bottom: 6px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 2px 8px;
+        border-radius: 9999px;
+        background: rgba(24, 24, 27, 0.85);
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 600;
+        white-space: nowrap;
+        backdrop-filter: blur(4px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
       }
 
       /* 토스트 알림 */
@@ -1449,6 +1591,90 @@
         color: #ffffff;
       }
 
+      /* 커스텀 플로팅 툴팁 */
+      .ui-tooltip {
+        position: fixed;
+        top: -9999px;
+        left: -9999px;
+        z-index: 100;
+        max-width: 248px;
+        padding: 5px 9px;
+        border-radius: 6px;
+        background-color: #18181b;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #fafafa;
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.38;
+        word-break: keep-all;
+        overflow-wrap: break-word;
+        pointer-events: none;
+        visibility: hidden;
+        opacity: 0;
+        transform: translateY(3px);
+        box-shadow:
+          0 8px 20px -4px rgba(0, 0, 0, 0.24),
+          0 2px 6px -1px rgba(0, 0, 0, 0.14);
+        transition:
+          opacity 110ms cubic-bezier(0.22, 1, 0.36, 1),
+          transform 110ms cubic-bezier(0.22, 1, 0.36, 1),
+          visibility 110ms;
+      }
+
+      .ui-tooltip[data-placement="bottom"] {
+        transform: translateY(-3px);
+      }
+
+      .ui-tooltip.visible {
+        visibility: visible;
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      html.dark .ui-tooltip {
+        background-color: #27272a;
+        border-color: rgba(255, 255, 255, 0.16);
+        color: #f4f4f5;
+        box-shadow:
+          0 10px 24px -4px rgba(0, 0, 0, 0.55),
+          0 2px 8px -2px rgba(0, 0, 0, 0.35);
+      }
+
+      .ui-tooltip-arrow {
+        position: absolute;
+        left: var(--arrow-left, 50%);
+        width: 7px;
+        height: 7px;
+        background-color: #18181b;
+        transform: translateX(-50%) rotate(45deg);
+      }
+
+      html.dark .ui-tooltip-arrow {
+        background-color: #27272a;
+      }
+
+      .ui-tooltip[data-placement="top"] .ui-tooltip-arrow {
+        bottom: -4px;
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      html.dark .ui-tooltip[data-placement="top"] .ui-tooltip-arrow {
+        border-right-color: rgba(255, 255, 255, 0.16);
+        border-bottom-color: rgba(255, 255, 255, 0.16);
+      }
+
+      .ui-tooltip[data-placement="bottom"] .ui-tooltip-arrow {
+        top: -4px;
+        border-left: 1px solid rgba(255, 255, 255, 0.1);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      html.dark .ui-tooltip[data-placement="bottom"] .ui-tooltip-arrow {
+        border-left-color: rgba(255, 255, 255, 0.16);
+        border-top-color: rgba(255, 255, 255, 0.16);
+      }
+
       /* SVG 공통 크기 유틸 */
       .icon-10 { width: 10px; height: 10px; flex-shrink: 0; }
       .icon-12 { width: 12px; height: 12px; flex-shrink: 0; }
@@ -1465,6 +1691,7 @@
         .control-card { padding: 12px; }
         .preview-section { height: 620px; }
         .single-img-hint { display: inline-block; }
+        .crop-toolbar-hint { display: inline-flex; }
         .backdrop-switch { display: flex; }
       }
 
@@ -1655,98 +1882,154 @@
               </div>
             </div>
 
-            <!-- 해상도 / 크기 맞춤 방식 -->
+            <!-- 배치 방식 (중복 없는 2가지 탭 모드: 원본 픽셀 그대로 vs 크기 맞춰 붙이기) -->
             <div class="field-group">
               <div class="row-between">
-                <label class="field-label">해상도 · 크기 맞춤</label>
-                <span class="field-hint">크기가 서로 다를 때</span>
+                <label class="field-label">크기 · 배치 방식</label>
+                <span id="layoutModeHint" class="field-hint">리사이징 · 잘림 없음</span>
               </div>
 
-              <div id="sizeModeGroup" class="grid-2">
-                <button type="button" data-size="original" class="seg-btn active" title="리사이징 없음 · 화질 열화 0%">
-                  원본 픽셀 유지
-                </button>
-                <button type="button" data-size="fit-largest" class="seg-btn" title="고해상도 유지 · 작은 쪽만 확대">
-                  큰 이미지에 맞춤
-                </button>
-                <button type="button" data-size="fit-smallest" class="seg-btn" title="확대 없이 큰 쪽을 비율 축소">
-                  작은 이미지에 맞춤
-                </button>
-                <button type="button" data-size="fit-first" class="seg-btn" title="첫 이미지 길이에 비율 통일">
-                  1번 이미지에 맞춤
-                </button>
-              </div>
-            </div>
-
-            <!-- 칸 비율 설정 -->
-            <div class="field-group">
-              <div class="row-between">
-                <label class="field-label">칸 비율</label>
-                <span id="aspectRatioHint" class="field-hint">각 이미지 비율 유지</span>
-              </div>
-
-              <div id="aspectRatioGroup" class="grid-5">
-                <button type="button" data-aspect="auto" class="seg-btn bold active" title="각 이미지의 원래 비율 유지">
-                  원본
-                </button>
-                <button type="button" data-aspect="1:1" class="seg-btn bold font-mono" title="모든 칸을 1:1 정사각형으로 통일">
-                  1:1
-                </button>
-                <button type="button" data-aspect="4:3" class="seg-btn bold font-mono" title="모든 칸을 4:3 가로 비율로 통일">
-                  4:3
-                </button>
-                <button type="button" data-aspect="3:4" class="seg-btn bold font-mono" title="모든 칸을 3:4 세로 비율로 통일">
-                  3:4
-                </button>
-                <button type="button" data-aspect="16:9" class="seg-btn bold font-mono" title="모든 칸을 16:9 와이드 비율로 통일">
-                  16:9
-                </button>
-              </div>
-            </div>
-
-            <!-- 영역 채우기 방식 (Contain / Cover) -->
-            <div class="field-group">
-              <div class="row-between">
-                <label class="field-label">영역 채우기</label>
-                <span id="fitModeHint" class="field-hint">잘림 없이 전체 표시</span>
-              </div>
-
-              <div id="fitModeGroup" class="grid-2">
+              <div id="layoutModeGroup" class="mode-tabs">
                 <button
                   type="button"
-                  data-fit="contain"
-                  class="seg-btn bold active"
-                  title="이미지가 잘리지 않도록 칸 안에 전체 표시 (Contain)"
+                  data-layout="original"
+                  class="mode-tab-btn active"
+                  title="확대·축소나 잘라내기 없이 각 이미지의 원본 픽셀 그대로 이어붙입니다"
+                >
+                  <svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="7" height="14" x="3" y="5" rx="1.5" />
+                    <rect width="7" height="10" x="14" y="7" rx="1.5" />
+                  </svg>
+                  <span>원본 픽셀 그대로</span>
+                </button>
+                <button
+                  type="button"
+                  data-layout="fit"
+                  class="mode-tab-btn"
+                  title="기준 해상도에 맞춰 이미지 크기를 통일하거나 일정한 칸에 채웁니다"
                 >
                   <svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="18" height="18" x="3" y="3" rx="2" />
-                    <rect width="10" height="6" x="7" y="9" rx="1" />
+                    <path d="M3 12h18" />
+                    <path d="M12 3v18" />
                   </svg>
-                  <span>비율 맞춤 (Contain)</span>
-                </button>
-                <button
-                  type="button"
-                  data-fit="cover"
-                  class="seg-btn bold"
-                  title="빈 여백 없이 칸에 꽉 채우고 넘치는 부분 잘라냄 (Cover)"
-                >
-                  <svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M8 3H5a2 2 0 0 0-2 2v3" />
-                    <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
-                    <path d="M3 16v3a2 2 0 0 0 2 2h3" />
-                    <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-                    <rect width="10" height="10" x="7" y="7" rx="1" />
-                  </svg>
-                  <span>꽉 채우기 (Cover)</span>
+                  <span>크기 맞춰 붙이기</span>
                 </button>
               </div>
 
-              <div id="alignRow" class="sub-option-row">
-                <span id="alignRowLabel" class="sub-option-label">크기 차이 정렬</span>
-                <div id="alignGroup" class="pill-group">
-                  <button type="button" data-align="start" class="pill-btn">상단</button>
-                  <button type="button" data-align="center" class="pill-btn active">중앙</button>
-                  <button type="button" data-align="end" class="pill-btn">하단</button>
+              <div class="mode-subpanel">
+                <!-- [탭 1] 원본 픽셀 그대로 전용 안내 -->
+                <div id="originalOptionsWrap" class="mode-stack">
+                  <p class="original-mode-note">
+                    각 이미지의 원본 해상도(1:1 픽셀)를 확대·축소·잘림 없이 그대로 배치합니다.
+                  </p>
+                </div>
+
+                <!-- [탭 2] 크기 맞춰 붙이기 전용 옵션 -->
+                <div id="fitOptionsWrap" class="mode-stack hidden">
+                  <div class="field-group">
+                    <div class="row-between">
+                      <label class="field-label">기준 해상도</label>
+                      <span id="frameScaleHint" class="field-hint font-mono">고해상도 유지</span>
+                    </div>
+
+                    <div id="frameScaleGroup" class="grid-3">
+                      <button type="button" data-frame-scale="largest" class="seg-btn active" title="가장 큰 이미지 해상도에 맞춰 화질 저하 방지">
+                        큰 이미지
+                      </button>
+                      <button type="button" data-frame-scale="smallest" class="seg-btn" title="가장 작은 이미지 해상도에 맞춰 과도한 확대 방지">
+                        작은 이미지
+                      </button>
+                      <button type="button" data-frame-scale="first" class="seg-btn" title="1번 이미지 해상도를 기준으로 크기 통일">
+                        1번 이미지
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="field-group">
+                    <div class="row-between">
+                      <label class="field-label">맞춤 방식</label>
+                      <span id="fitModeHint" class="field-hint">잘림 없음 · 비율 유지</span>
+                    </div>
+
+                    <div id="fitModeGroup" class="grid-2">
+                      <button
+                        type="button"
+                        data-fit="contain"
+                        class="seg-btn bold active"
+                        title="이미지가 단 1px도 잘리지 않도록 원래 비율을 유지하며 맞춤 (Contain)"
+                      >
+                        <svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <rect width="18" height="18" x="3" y="3" rx="2" />
+                          <rect width="10" height="6" x="7" y="9" rx="1" />
+                        </svg>
+                        <span>잘림 없이 (Contain)</span>
+                      </button>
+                      <button
+                        type="button"
+                        data-fit="cover"
+                        class="seg-btn bold"
+                        title="모든 칸을 동일 크기로 맞추고 빈 여백 없이 꽉 채운 뒤 넘치는 부분 잘라냄 (Cover)"
+                      >
+                        <svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                          <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                          <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                          <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                          <rect width="10" height="10" x="7" y="7" rx="1" />
+                        </svg>
+                        <span>꽉 채우기 (Cover)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="field-group">
+                    <div class="row-between">
+                      <label class="field-label">칸 비율</label>
+                      <span id="aspectRatioHint" class="field-hint">각 이미지 비율 유지</span>
+                    </div>
+
+                    <div id="aspectRatioGroup" class="grid-5">
+                      <button type="button" data-aspect="auto" class="seg-btn bold active" title="고정 비율을 강제하지 않고 맞춤 방식에 따라 자동 계산">
+                        자동
+                      </button>
+                      <button type="button" data-aspect="1:1" class="seg-btn bold font-mono" title="모든 칸을 1:1 정사각형으로 통일">
+                        1:1
+                      </button>
+                      <button type="button" data-aspect="4:3" class="seg-btn bold font-mono" title="모든 칸을 4:3 가로 비율로 통일">
+                        4:3
+                      </button>
+                      <button type="button" data-aspect="3:4" class="seg-btn bold font-mono" title="모든 칸을 3:4 세로 비율로 통일">
+                        3:4
+                      </button>
+                      <button type="button" data-aspect="16:9" class="seg-btn bold font-mono" title="모든 칸을 16:9 와이드 비율로 통일">
+                        16:9
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 공통 정렬 / 잘라내기 위치 기준 -->
+                <div id="alignRow" class="sub-option-row" style="padding-top: 2px">
+                  <span id="alignRowLabel" class="sub-option-label">크기 차이 정렬</span>
+                  <div id="alignGroup" class="pill-group">
+                    <button type="button" data-align="start" class="pill-btn">상단</button>
+                    <button type="button" data-align="center" class="pill-btn active">중앙</button>
+                    <button type="button" data-align="end" class="pill-btn">하단</button>
+                  </div>
+                </div>
+
+                <!-- 넘치는 부분이 잘릴 때 드래그 미세 조정 안내 -->
+                <div id="cropDragGuideBox" class="crop-guide-box hidden">
+                  <svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="5 9 2 12 5 15" />
+                    <polyline points="9 5 12 2 15 5" />
+                    <polyline points="15 19 12 22 9 19" />
+                    <polyline points="19 9 22 12 19 15" />
+                    <line x1="2" x2="22" y1="12" y2="12" />
+                    <line x1="12" x2="12" y1="2" y2="22" />
+                  </svg>
+                  <span>미리보기 이미지를 드래그해 잘리는 위치를 조정할 수 있습니다. (더블클릭: 초기화)</span>
                 </div>
               </div>
             </div>
@@ -1888,6 +2171,17 @@
               <span class="preview-label">미리보기</span>
               <span id="toolbarDims" class="preview-dims hidden"></span>
               <span id="singleImgHint" class="single-img-hint hidden">· 이미지를 한 장 더 추가하면 합쳐집니다</span>
+              <span id="cropDragToolbarHint" class="crop-toolbar-hint hidden">
+                <svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="5 9 2 12 5 15" />
+                  <polyline points="9 5 12 2 15 5" />
+                  <polyline points="15 19 12 22 9 19" />
+                  <polyline points="19 9 22 12 19 15" />
+                  <line x1="2" x2="22" y1="12" y2="12" />
+                  <line x1="12" x2="12" y1="2" y2="22" />
+                </svg>
+                <span>드래그로 잘리는 위치 조정 · 더블클릭 초기화</span>
+              </span>
             </div>
 
             <div class="preview-controls">
@@ -1993,6 +2287,9 @@
             <!-- 실시간 캔버스 -->
             <div id="canvasHolder" class="canvas-holder hidden">
               <canvas id="previewCanvas"></canvas>
+              <div id="cropSlotHighlight" class="crop-slot-highlight hidden">
+                <span id="cropSlotBadge" class="crop-slot-badge"></span>
+              </div>
             </div>
           </div>
         </section>
@@ -2000,6 +2297,12 @@
 
       <!-- 토스트 알림 컨테이너 -->
       <div id="toastStack" class="toast-stack"></div>
+
+      <!-- 커스텀 플로팅 툴팁 -->
+      <div id="uiTooltip" class="ui-tooltip" data-placement="top" role="tooltip" aria-hidden="true">
+        <span id="uiTooltipText"></span>
+        <span class="ui-tooltip-arrow"></span>
+      </div>
     </div>
 
     <script>
@@ -2037,9 +2340,10 @@
           images: [],
           direction: 'horizontal',
           gridCols: 2,
-          sizeMode: 'original',
-          aspectRatio: 'auto',
+          layoutMode: 'original',
+          frameScale: 'largest',
           fitMode: 'contain',
+          aspectRatio: 'auto',
           align: 'center',
           gap: 0,
           padding: 0,
@@ -2066,6 +2370,20 @@
         var rafRenderId = null;
         var copiedTimerId = null;
         var panState = { active: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0 };
+        var cropDragState = {
+          active: false,
+          pointerId: null,
+          uid: null,
+          startClientX: 0,
+          startClientY: 0,
+          startRatioX: 0.5,
+          startRatioY: 0.5,
+          overflowW: 0,
+          overflowH: 0,
+          canDragX: false,
+          canDragY: false
+        };
+        var hoveredClipUid = null;
 
         // DOM 참조
         var el = {
@@ -2087,14 +2405,20 @@
           directionGroup: document.getElementById('directionGroup'),
           gridColsRow: document.getElementById('gridColsRow'),
           gridColsGroup: document.getElementById('gridColsGroup'),
-          sizeModeGroup: document.getElementById('sizeModeGroup'),
+          layoutModeGroup: document.getElementById('layoutModeGroup'),
+          layoutModeHint: document.getElementById('layoutModeHint'),
+          originalOptionsWrap: document.getElementById('originalOptionsWrap'),
+          fitOptionsWrap: document.getElementById('fitOptionsWrap'),
           aspectRatioGroup: document.getElementById('aspectRatioGroup'),
           aspectRatioHint: document.getElementById('aspectRatioHint'),
           fitModeGroup: document.getElementById('fitModeGroup'),
           fitModeHint: document.getElementById('fitModeHint'),
+          frameScaleGroup: document.getElementById('frameScaleGroup'),
+          frameScaleHint: document.getElementById('frameScaleHint'),
           alignRow: document.getElementById('alignRow'),
           alignRowLabel: document.getElementById('alignRowLabel'),
           alignGroup: document.getElementById('alignGroup'),
+          cropDragGuideBox: document.getElementById('cropDragGuideBox'),
           gapPresets: document.getElementById('gapPresets'),
           gapInput: document.getElementById('gapInput'),
           paddingPresets: document.getElementById('paddingPresets'),
@@ -2120,6 +2444,7 @@
           copyBtnKbd: document.getElementById('copyBtnKbd'),
           toolbarDims: document.getElementById('toolbarDims'),
           singleImgHint: document.getElementById('singleImgHint'),
+          cropDragToolbarHint: document.getElementById('cropDragToolbarHint'),
           backdropGroup: document.getElementById('backdropGroup'),
           zoomFitBtn: document.getElementById('zoomFitBtn'),
           zoomFitLabel: document.getElementById('zoomFitLabel'),
@@ -2133,7 +2458,12 @@
           limitErrorReason: document.getElementById('limitErrorReason'),
           canvasHolder: document.getElementById('canvasHolder'),
           previewCanvas: document.getElementById('previewCanvas'),
+          cropSlotHighlight: document.getElementById('cropSlotHighlight'),
+          cropSlotBadge: document.getElementById('cropSlotBadge'),
           toastStack: document.getElementById('toastStack')
+          toastStack: document.getElementById('toastStack'),
+          uiTooltip: document.getElementById('uiTooltip'),
+          uiTooltipText: document.getElementById('uiTooltipText')
         };
 
         // ==================== 유틸리티 & 코어 알고리즘 ====================
@@ -2208,7 +2538,9 @@
                 rawHeight: img.naturalHeight,
                 rotation: 0,
                 flipX: false,
-                flipY: false
+                flipY: false,
+                cropPosX: null,
+                cropPosY: null
               });
             };
             img.onerror = function () {
@@ -2225,6 +2557,39 @@
           if (align === 'end') return diff;
           // 정수 좌표 유지로 0.5px 서브픽셀 블러 원천 방지 (음수 오프셋에서도 대칭 유지)
           return diff > 0 ? Math.floor(diff / 2) : -Math.floor(-diff / 2);
+        }
+
+        function alignToRatio(align) {
+          if (align === 'start') return 0;
+          if (align === 'end') return 1;
+          return 0.5;
+        }
+
+        function computeCoverAxisOffset(slotSpan, coverSpan, customRatio, align) {
+          var overflow = coverSpan - slotSpan;
+          if (overflow <= 0) return 0;
+          if (typeof customRatio === 'number' && Number.isFinite(customRatio)) {
+            var clamped = Math.max(0, Math.min(1, customRatio));
+            return -Math.round(overflow * clamped);
+          }
+          return computeAlignOffset(slotSpan, coverSpan, align);
+        }
+
+        function hasAnyCustomCrop() {
+          for (var i = 0; i < state.images.length; i += 1) {
+            var img = state.images[i];
+            if (typeof img.cropPosX === 'number' || typeof img.cropPosY === 'number') {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        function resetAllCustomCrops() {
+          for (var i = 0; i < state.images.length; i += 1) {
+            state.images[i].cropPosX = null;
+            state.images[i].cropPosY = null;
+          }
         }
 
         function buildSlotPlacement(params) {
@@ -2255,18 +2620,36 @@
               coverH = Math.max(slotH, Math.round((srcH * slotW) / srcW));
             }
 
+            var canDragX = coverW > slotW;
+            var canDragY = coverH > slotH;
+            var defaultRatio = alignToRatio(align);
+            var effRatioX = canDragX
+              ? typeof img.cropPosX === 'number'
+                ? Math.max(0, Math.min(1, img.cropPosX))
+                : defaultRatio
+              : 0.5;
+            var effRatioY = canDragY
+              ? typeof img.cropPosY === 'number'
+                ? Math.max(0, Math.min(1, img.cropPosY))
+                : defaultRatio
+              : 0.5;
+
             return {
               uid: img.uid,
               element: img.element,
               rotation: img.rotation,
               flipX: img.flipX,
               flipY: img.flipY,
-              x: slotX + computeAlignOffset(slotW, coverW, align),
-              y: slotY + computeAlignOffset(slotH, coverH, align),
+              x: slotX + computeCoverAxisOffset(slotW, coverW, img.cropPosX, align),
+              y: slotY + computeCoverAxisOffset(slotH, coverH, img.cropPosY, align),
               drawW: coverW,
               drawH: coverH,
               isScaled: coverW !== srcW || coverH !== srcH,
-              hasClip: coverW > slotW || coverH > slotH,
+              hasClip: canDragX || canDragY,
+              canDragX: canDragX,
+              canDragY: canDragY,
+              effRatioX: effRatioX,
+              effRatioY: effRatioY,
               clipX: slotX,
               clipY: slotY,
               clipW: slotW,
@@ -2286,6 +2669,10 @@
             drawH: fitH,
             isScaled: isFitScaled,
             hasClip: false,
+            canDragX: false,
+            canDragY: false,
+            effRatioX: 0.5,
+            effRatioY: 0.5,
             clipX: slotX,
             clipY: slotY,
             clipW: slotW,
@@ -2308,8 +2695,10 @@
 
           var gap = Math.max(0, Math.round(options.gap));
           var padding = Math.max(0, Math.round(options.padding));
-          var fitMode = options.fitMode === 'cover' ? 'cover' : 'contain';
-          var ratioSpec = parseAspectRatioSpec(options.aspectRatio);
+          var isOriginalMode = options.layoutMode !== 'fit';
+          var frameScale = options.frameScale || 'largest';
+          var fitMode = !isOriginalMode && options.fitMode === 'cover' ? 'cover' : 'contain';
+          var ratioSpec = isOriginalMode ? null : parseAspectRatioSpec(options.aspectRatio);
           var oriented = images.map(function (img) {
             var dim = getOrientedDimensions(img);
             return { img: img, width: dim.width, height: dim.height };
@@ -2318,41 +2707,61 @@
           var placements = [];
           var contentWidth = 0;
           var contentHeight = 0;
+          var uniformCellWidth = null;
+          var uniformCellHeight = null;
+          var unifiedAxisLabel = null;
 
-          if (ratioSpec) {
-            var rw = ratioSpec.rw;
-            var rh = ratioSpec.rh;
-            var unitWidths = oriented.map(function (o) {
-              return Math.max(o.width, Math.round((o.height * rw) / rh));
-            });
+          // 크기 맞춰 붙이기 모드에서 고정 비율(1:1 등)을 지정했거나 꽉 채우기(Cover)를 선택한 경우: 모든 칸을 동일한 크기(cellW × cellH)로 통일
+          if (!isOriginalMode && (ratioSpec || fitMode === 'cover')) {
+            var cellW;
+            var cellH;
 
-            var baseCellW;
-            if (options.sizeMode === 'fit-smallest') {
-              baseCellW = Math.min.apply(null, unitWidths);
-            } else if (options.sizeMode === 'fit-first') {
-              baseCellW = unitWidths[0];
+            if (ratioSpec) {
+              var rw = ratioSpec.rw;
+              var rh = ratioSpec.rh;
+              var unitWidths = oriented.map(function (o) {
+                return Math.max(o.width, Math.round((o.height * rw) / rh));
+              });
+
+              var baseCellW;
+              if (frameScale === 'smallest') {
+                baseCellW = Math.min.apply(null, unitWidths);
+              } else if (frameScale === 'first') {
+                baseCellW = unitWidths[0];
+              } else {
+                baseCellW = Math.max.apply(null, unitWidths);
+              }
+
+              cellW = Math.max(1, Math.round(baseCellW));
+              cellH = Math.max(1, Math.round((cellW * rh) / rw));
+            } else if (frameScale === 'first') {
+              cellW = Math.max(1, Math.round(oriented[0].width));
+              cellH = Math.max(1, Math.round(oriented[0].height));
+            } else if (frameScale === 'smallest') {
+              cellW = Math.max(
+                1,
+                Math.round(Math.min.apply(null, oriented.map(function (o) { return o.width; })))
+              );
+              cellH = Math.max(
+                1,
+                Math.round(Math.min.apply(null, oriented.map(function (o) { return o.height; })))
+              );
             } else {
-              baseCellW = Math.max.apply(null, unitWidths);
+              cellW = Math.max(
+                1,
+                Math.round(Math.max.apply(null, oriented.map(function (o) { return o.width; })))
+              );
+              cellH = Math.max(
+                1,
+                Math.round(Math.max.apply(null, oriented.map(function (o) { return o.height; })))
+              );
             }
 
-            var cellW = Math.max(1, Math.round(baseCellW));
-            var cellH = Math.max(1, Math.round((cellW * rh) / rw));
-
-            if (options.sizeMode === 'original') {
-              var maxRawW = Math.max.apply(null, oriented.map(function (o) { return o.width; }));
-              var maxRawH = Math.max.apply(null, oriented.map(function (o) { return o.height; }));
-              if (cellH < maxRawH) {
-                cellH = maxRawH;
-                cellW = Math.max(cellW, Math.round((cellH * rw) / rh));
-              }
-              if (cellW < maxRawW) {
-                cellW = maxRawW;
-                cellH = Math.max(cellH, Math.round((cellW * rh) / rw));
-              }
-            }
+            uniformCellWidth = cellW;
+            uniformCellHeight = cellH;
 
             var sizedFixed = oriented.map(function (o) {
-              if (options.sizeMode === 'original' || (o.width === cellW && o.height === cellH)) {
+              if (o.width === cellW && o.height === cellH) {
                 return {
                   img: o.img,
                   srcW: o.width,
@@ -2456,12 +2865,15 @@
             }
           } else if (options.direction === 'horizontal') {
             var targetHeight = null;
-            if (options.sizeMode === 'fit-largest') {
-              targetHeight = Math.max.apply(null, oriented.map(function (o) { return o.height; }));
-            } else if (options.sizeMode === 'fit-smallest') {
-              targetHeight = Math.min.apply(null, oriented.map(function (o) { return o.height; }));
-            } else if (options.sizeMode === 'fit-first') {
-              targetHeight = oriented[0].height;
+            if (!isOriginalMode) {
+              if (frameScale === 'smallest') {
+                targetHeight = Math.min.apply(null, oriented.map(function (o) { return o.height; }));
+              } else if (frameScale === 'first') {
+                targetHeight = oriented[0].height;
+              } else {
+                targetHeight = Math.max.apply(null, oriented.map(function (o) { return o.height; }));
+              }
+              unifiedAxisLabel = '높이 ' + Math.round(targetHeight).toLocaleString() + 'px 통일';
             }
 
             var sizedH = oriented.map(function (o) {
@@ -2514,12 +2926,15 @@
             }
           } else if (options.direction === 'vertical') {
             var targetWidth = null;
-            if (options.sizeMode === 'fit-largest') {
-              targetWidth = Math.max.apply(null, oriented.map(function (o) { return o.width; }));
-            } else if (options.sizeMode === 'fit-smallest') {
-              targetWidth = Math.min.apply(null, oriented.map(function (o) { return o.width; }));
-            } else if (options.sizeMode === 'fit-first') {
-              targetWidth = oriented[0].width;
+            if (!isOriginalMode) {
+              if (frameScale === 'smallest') {
+                targetWidth = Math.min.apply(null, oriented.map(function (o) { return o.width; }));
+              } else if (frameScale === 'first') {
+                targetWidth = oriented[0].width;
+              } else {
+                targetWidth = Math.max.apply(null, oriented.map(function (o) { return o.width; }));
+              }
+              unifiedAxisLabel = '가로 ' + Math.round(targetWidth).toLocaleString() + 'px 통일';
             }
 
             var sizedV = oriented.map(function (o) {
@@ -2574,12 +2989,15 @@
             // Grid (바둑판 배치)
             var effectiveCols = Math.max(1, Math.min(Math.max(2, options.gridCols), oriented.length));
             var targetGridWidth = null;
-            if (options.sizeMode === 'fit-largest') {
-              targetGridWidth = Math.max.apply(null, oriented.map(function (o) { return o.width; }));
-            } else if (options.sizeMode === 'fit-smallest') {
-              targetGridWidth = Math.min.apply(null, oriented.map(function (o) { return o.width; }));
-            } else if (options.sizeMode === 'fit-first') {
-              targetGridWidth = oriented[0].width;
+            if (!isOriginalMode) {
+              if (frameScale === 'smallest') {
+                targetGridWidth = Math.min.apply(null, oriented.map(function (o) { return o.width; }));
+              } else if (frameScale === 'first') {
+                targetGridWidth = oriented[0].width;
+              } else {
+                targetGridWidth = Math.max.apply(null, oriented.map(function (o) { return o.width; }));
+              }
+              unifiedAxisLabel = '열 가로 ' + Math.round(targetGridWidth).toLocaleString() + 'px 통일';
             }
 
             var sizedG = oriented.map(function (o) {
@@ -2685,8 +3103,12 @@
           return {
             canvasWidth: canvasWidth,
             canvasHeight: canvasHeight,
+            uniformCellWidth: uniformCellWidth,
+            uniformCellHeight: uniformCellHeight,
+            unifiedAxisLabel: unifiedAxisLabel,
             placements: placements,
             hasAnyScaling: placements.some(function (p) { return p.isScaled; }),
+            hasAnyClip: placements.some(function (p) { return p.hasClip; }),
             exceedsLimit: exceedsLimit,
             limitReason: limitReason
           };
@@ -3001,6 +3423,10 @@
           }
 
           el.imageList.innerHTML = html;
+          sweepNativeTitles(el.imageList);
+          if (activeTooltipTarget && !activeTooltipTarget.isConnected) {
+            hideCustomTooltip();
+          }
         }
 
         function setGroupActive(container, attrName, activeValue) {
@@ -3012,6 +3438,9 @@
         }
 
         function syncControlsUI() {
+          var isFitModeTab = state.layoutMode === 'fit';
+          var isEffectiveCover = isFitModeTab && state.fitMode === 'cover';
+
           el.reverseOrderIcon.innerHTML =
             state.direction === 'horizontal' ? ICONS.arrowLR : ICONS.arrowUD;
 
@@ -3019,36 +3448,81 @@
           el.gridColsRow.classList.toggle('hidden', state.direction !== 'grid');
           setGroupActive(el.gridColsGroup, 'data-cols', state.gridCols);
 
-          setGroupActive(el.sizeModeGroup, 'data-size', state.sizeMode);
+          setGroupActive(el.layoutModeGroup, 'data-layout', state.layoutMode);
+          el.layoutModeHint.textContent = isFitModeTab
+            ? '기준 크기에 맞춰 확대 · 축소'
+            : '리사이징 · 잘림 없음';
+          el.originalOptionsWrap.classList.toggle('hidden', isFitModeTab);
+          el.fitOptionsWrap.classList.toggle('hidden', !isFitModeTab);
+
+          setGroupActive(el.frameScaleGroup, 'data-frame-scale', state.frameScale);
+          if (
+            state.mergePlan &&
+            state.mergePlan.uniformCellWidth &&
+            state.mergePlan.uniformCellHeight
+          ) {
+            el.frameScaleHint.textContent =
+              '1칸 ' +
+              state.mergePlan.uniformCellWidth.toLocaleString() +
+              '×' +
+              state.mergePlan.uniformCellHeight.toLocaleString();
+          } else if (state.mergePlan && state.mergePlan.unifiedAxisLabel) {
+            el.frameScaleHint.textContent = state.mergePlan.unifiedAxisLabel;
+          } else {
+            el.frameScaleHint.textContent =
+              state.frameScale === 'smallest'
+                ? '확대 최소화'
+                : state.frameScale === 'first'
+                  ? '1번 이미지 기준'
+                  : '고해상도 유지';
+          }
+
+          setGroupActive(el.fitModeGroup, 'data-fit', state.fitMode);
+          el.fitModeHint.textContent =
+            state.fitMode === 'cover'
+              ? '여백 없음 · 넘치는 부분 자름'
+              : '잘림 없음 · 비율 유지';
+
           setGroupActive(el.aspectRatioGroup, 'data-aspect', state.aspectRatio);
+          var autoAspectHint =
+            state.fitMode === 'cover'
+              ? state.frameScale === 'first'
+                ? '1번 이미지 크기로 모든 칸 통일'
+                : '모든 칸 동일 크기로 자동 통일'
+              : state.direction === 'horizontal'
+                ? '각 비율 유지 (높이만 통일)'
+                : state.direction === 'vertical'
+                  ? '각 비율 유지 (가로폭만 통일)'
+                  : '각 비율 유지 (열 가로폭 통일)';
           var aspectHints = {
-            auto: '각 이미지 비율 유지',
+            auto: autoAspectHint,
             '1:1': '모든 칸 정사각형 통일',
             '4:3': '모든 칸 4:3 가로형 통일',
             '3:4': '모든 칸 3:4 세로형 통일',
             '16:9': '모든 칸 16:9 와이드 통일'
           };
           el.aspectRatioHint.textContent =
-            aspectHints[state.aspectRatio] || '각 이미지 비율 유지';
-
-          setGroupActive(el.fitModeGroup, 'data-fit', state.fitMode);
-          el.fitModeHint.textContent =
-            state.fitMode === 'cover' ? '여백 없이 꽉 채움' : '잘림 없이 전체 표시';
+            aspectHints[state.aspectRatio] || autoAspectHint;
 
           var showAlign =
+            !isFitModeTab ||
+            isEffectiveCover ||
             state.aspectRatio !== 'auto' ||
-            state.sizeMode === 'original' ||
             state.direction === 'grid';
+          var customCropped = isEffectiveCover && hasAnyCustomCrop();
           el.alignRow.classList.toggle('hidden', !showAlign);
-          el.alignRowLabel.textContent =
-            state.fitMode === 'cover' ? '잘라내기 기준' : '크기 차이 정렬';
+          el.alignRowLabel.textContent = isEffectiveCover
+            ? customCropped
+              ? '잘라내기 (직접 조정됨)'
+              : '잘라내기 기준'
+            : isFitModeTab
+              ? '여백 내 정렬'
+              : '크기 차이 정렬';
 
           var isVerticalAxisAlign =
-            state.aspectRatio !== 'auto' || state.direction === 'grid'
+            isFitModeTab || state.direction === 'grid'
               ? null
-              : state.direction === 'horizontal'
-                ? state.fitMode !== 'cover'
-                : state.fitMode === 'cover';
+              : state.direction === 'horizontal';
 
           var alignButtons = el.alignGroup.querySelectorAll('[data-align]');
           for (var i = 0; i < alignButtons.length; i += 1) {
@@ -3060,8 +3534,16 @@
               alignButtons[i].textContent =
                 isVerticalAxisAlign === null ? '끝' : isVerticalAxisAlign ? '하단' : '우측';
             }
-            alignButtons[i].classList.toggle('active', key === state.align);
+            alignButtons[i].classList.toggle('active', !customCropped && key === state.align);
           }
+
+          var hasActiveClip = Boolean(
+            isEffectiveCover &&
+              state.mergePlan &&
+              !state.mergePlan.exceedsLimit &&
+              state.mergePlan.hasAnyClip
+          );
+          el.cropDragGuideBox.classList.toggle('hidden', !hasActiveClip);
 
           setGroupActive(el.gapPresets, 'data-gap', state.gap);
           setGroupActive(el.paddingPresets, 'data-padding', state.padding);
@@ -3162,12 +3644,93 @@
           }
         }
 
+        function syncCropHighlightUI() {
+          var plan = state.mergePlan;
+          var targetUid = cropDragState.active ? cropDragState.uid : hoveredClipUid;
+          if (!plan || plan.exceedsLimit || !targetUid) {
+            el.cropSlotHighlight.classList.add('hidden');
+            el.cropSlotHighlight.classList.remove('dragging');
+            el.previewCanvas.style.cursor = '';
+            return;
+          }
+
+          var targetPlacement = null;
+          for (var i = 0; i < plan.placements.length; i += 1) {
+            if (plan.placements[i].uid === targetUid && plan.placements[i].hasClip) {
+              targetPlacement = plan.placements[i];
+              break;
+            }
+          }
+
+          if (!targetPlacement) {
+            el.cropSlotHighlight.classList.add('hidden');
+            el.cropSlotHighlight.classList.remove('dragging');
+            el.previewCanvas.style.cursor = '';
+            return;
+          }
+
+          el.previewCanvas.style.cursor = cropDragState.active ? 'grabbing' : 'grab';
+          el.cropSlotHighlight.classList.remove('hidden');
+          el.cropSlotHighlight.classList.toggle('dragging', cropDragState.active);
+          el.cropSlotHighlight.style.left =
+            ((targetPlacement.clipX / plan.canvasWidth) * 100).toFixed(4) + '%';
+          el.cropSlotHighlight.style.top =
+            ((targetPlacement.clipY / plan.canvasHeight) * 100).toFixed(4) + '%';
+          el.cropSlotHighlight.style.width =
+            ((targetPlacement.clipW / plan.canvasWidth) * 100).toFixed(4) + '%';
+          el.cropSlotHighlight.style.height =
+            ((targetPlacement.clipH / plan.canvasHeight) * 100).toFixed(4) + '%';
+
+          var canvasCssW =
+            parseFloat(el.previewCanvas.style.width) || el.previewCanvas.clientWidth || 0;
+          var slotCssW =
+            plan.canvasWidth > 0 ? (targetPlacement.clipW / plan.canvasWidth) * canvasCssW : 0;
+          var slotCssH =
+            plan.canvasWidth > 0 ? (targetPlacement.clipH / plan.canvasWidth) * canvasCssW : 0;
+
+          if (slotCssW < 84 || slotCssH < 40) {
+            el.cropSlotBadge.classList.add('hidden');
+          } else {
+            el.cropSlotBadge.classList.remove('hidden');
+            if (cropDragState.active) {
+              if (targetPlacement.canDragX && targetPlacement.canDragY) {
+                el.cropSlotBadge.textContent =
+                  '✥ ' +
+                  Math.round(targetPlacement.effRatioX * 100) +
+                  '% · ' +
+                  Math.round(targetPlacement.effRatioY * 100) +
+                  '%';
+              } else if (targetPlacement.canDragX) {
+                el.cropSlotBadge.textContent =
+                  '↔ 좌우 ' + Math.round(targetPlacement.effRatioX * 100) + '%';
+              } else {
+                el.cropSlotBadge.textContent =
+                  '↕ 상하 ' + Math.round(targetPlacement.effRatioY * 100) + '%';
+              }
+            } else {
+              if (targetPlacement.canDragX && targetPlacement.canDragY) {
+                el.cropSlotBadge.textContent = '✥ 드래그로 위치 조정';
+              } else if (targetPlacement.canDragX) {
+                el.cropSlotBadge.textContent = '↔ 좌우 드래그로 조정';
+              } else {
+                el.cropSlotBadge.textContent = '↕ 상하 드래그로 조정';
+              }
+            }
+          }
+        }
+
         function syncPreviewLayoutUI() {
           var plan = state.mergePlan;
           var fitScale = getFitScale();
           var displayScale = state.zoomMode === 'fit' ? fitScale : state.zoomMode;
 
-          el.singleImgHint.classList.toggle('hidden', state.images.length !== 1);
+          var hasDraggableClip = Boolean(plan && !plan.exceedsLimit && plan.hasAnyClip);
+          el.singleImgHint.classList.toggle(
+            'hidden',
+            state.images.length !== 1 || hasDraggableClip
+          );
+          el.cropDragToolbarHint.classList.toggle('hidden', !hasDraggableClip);
+          el.previewCanvas.style.touchAction = hasDraggableClip ? 'none' : 'auto';
 
           if (plan && !plan.exceedsLimit) {
             el.toolbarDims.textContent =
@@ -3201,7 +3764,7 @@
             el.canvasHolder.classList.add('hidden');
             el.limitErrorReason.innerHTML =
               escapeHtml(plan.limitReason || '') +
-              ' 좌측 설정에서 <strong>작은 이미지에 맞춤</strong>을 선택해 주세요.';
+              ' 좌측 <strong>크기 맞춰 붙이기</strong> 탭에서 기준 해상도를 <strong>작은 이미지</strong>로 선택해 주세요.';
           } else {
             el.emptyStateCard.classList.add('hidden');
             el.limitErrorCard.classList.add('hidden');
@@ -3213,6 +3776,8 @@
               Math.max(1, Math.round(plan.canvasHeight * displayScale)) + 'px';
             el.previewCanvas.style.imageRendering = displayScale > 1 ? 'pixelated' : 'auto';
           }
+
+          syncCropHighlightUI();
         }
 
         function scheduleCanvasRender() {
@@ -3239,9 +3804,10 @@
           state.mergePlan = computeMergePlan(state.images, {
             direction: state.direction,
             gridCols: state.gridCols,
-            sizeMode: state.sizeMode,
-            aspectRatio: state.aspectRatio,
+            layoutMode: state.layoutMode,
+            frameScale: state.frameScale,
             fitMode: state.fitMode,
+            aspectRatio: state.aspectRatio,
             align: state.align,
             gap: state.gap,
             padding: state.padding
@@ -3327,6 +3893,8 @@
           img.rotation = (img.rotation + 90) % 360;
           img.flipX = img.flipY;
           img.flipY = prevFlipX;
+          img.cropPosX = null;
+          img.cropPosY = null;
           recomputeAndRender({ rebuildList: true });
         }
 
@@ -3334,6 +3902,9 @@
           var img = state.images[index];
           if (!img) return;
           img.flipX = !img.flipX;
+          if (typeof img.cropPosX === 'number') {
+            img.cropPosX = 1 - img.cropPosX;
+          }
           recomputeAndRender({ rebuildList: true });
         }
 
@@ -3341,6 +3912,9 @@
           var img = state.images[index];
           if (!img) return;
           img.flipY = !img.flipY;
+          if (typeof img.cropPosY === 'number') {
+            img.cropPosY = 1 - img.cropPosY;
+          }
           recomputeAndRender({ rebuildList: true });
         }
 
@@ -3750,12 +4324,13 @@
           }
         });
 
-        el.sizeModeGroup.addEventListener('click', function (e) {
-          var btn = e.target.closest('[data-size]');
+        el.layoutModeGroup.addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-layout]');
           if (!btn) return;
-          var mode = btn.getAttribute('data-size');
-          if (mode && mode !== state.sizeMode) {
-            state.sizeMode = mode;
+          var layout = btn.getAttribute('data-layout');
+          if (layout && layout !== state.layoutMode) {
+            state.layoutMode = layout;
+            hoveredClipUid = null;
             recomputeAndRender();
           }
         });
@@ -3776,6 +4351,17 @@
           var fit = btn.getAttribute('data-fit');
           if (fit && fit !== state.fitMode) {
             state.fitMode = fit;
+            hoveredClipUid = null;
+            recomputeAndRender();
+          }
+        });
+
+        el.frameScaleGroup.addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-frame-scale]');
+          if (!btn) return;
+          var scale = btn.getAttribute('data-frame-scale');
+          if (scale && scale !== state.frameScale) {
+            state.frameScale = scale;
             recomputeAndRender();
           }
         });
@@ -3784,8 +4370,11 @@
           var btn = e.target.closest('[data-align]');
           if (!btn) return;
           var align = btn.getAttribute('data-align');
-          if (align && align !== state.align) {
+          if (!align) return;
+          var hadCustom = hasAnyCustomCrop();
+          if (align !== state.align || hadCustom) {
             state.align = align;
+            resetAllCustomCrops();
             recomputeAndRender();
           }
         });
@@ -3987,9 +4576,173 @@
           syncPreviewLayoutUI();
         });
 
+        // 프리뷰 캔버스 내 이미지 잘라내기(Cover) 위치 직접 드래그 조정
+        function findClipPlacementAtClientPoint(clientX, clientY) {
+          var plan = state.mergePlan;
+          if (!plan || plan.exceedsLimit) return null;
+          var rect = el.previewCanvas.getBoundingClientRect();
+          if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+
+          var cx = ((clientX - rect.left) / rect.width) * plan.canvasWidth;
+          var cy = ((clientY - rect.top) / rect.height) * plan.canvasHeight;
+          if (cx < 0 || cy < 0 || cx > plan.canvasWidth || cy > plan.canvasHeight) {
+            return null;
+          }
+
+          for (var i = plan.placements.length - 1; i >= 0; i -= 1) {
+            var p = plan.placements[i];
+            if (
+              p.hasClip &&
+              cx >= p.clipX &&
+              cx <= p.clipX + p.clipW &&
+              cy >= p.clipY &&
+              cy <= p.clipY + p.clipH
+            ) {
+              return { placement: p, rect: rect };
+            }
+          }
+          return null;
+        }
+
+        function findImageByUid(uid) {
+          for (var i = 0; i < state.images.length; i += 1) {
+            if (state.images[i].uid === uid) return state.images[i];
+          }
+          return null;
+        }
+
+        el.previewCanvas.addEventListener('pointerdown', function (e) {
+          if (e.pointerType === 'mouse' && e.button !== 0) return;
+          var hit = findClipPlacementAtClientPoint(e.clientX, e.clientY);
+          if (!hit) return;
+
+          e.preventDefault();
+          var p = hit.placement;
+          cropDragState.active = true;
+          cropDragState.pointerId = e.pointerId;
+          cropDragState.uid = p.uid;
+          cropDragState.startClientX = e.clientX;
+          cropDragState.startClientY = e.clientY;
+          cropDragState.startRatioX = p.effRatioX;
+          cropDragState.startRatioY = p.effRatioY;
+          cropDragState.overflowW = Math.max(0, p.drawW - p.clipW);
+          cropDragState.overflowH = Math.max(0, p.drawH - p.clipH);
+          cropDragState.canDragX = p.canDragX;
+          cropDragState.canDragY = p.canDragY;
+          hoveredClipUid = p.uid;
+
+          try {
+            el.previewCanvas.setPointerCapture(e.pointerId);
+          } catch (_) {}
+          syncCropHighlightUI();
+        });
+
+        el.previewCanvas.addEventListener('pointermove', function (e) {
+          if (cropDragState.active) {
+            if (cropDragState.pointerId !== null && e.pointerId !== cropDragState.pointerId) {
+              return;
+            }
+            var plan = state.mergePlan;
+            var rect = el.previewCanvas.getBoundingClientRect();
+            if (!plan || !rect || rect.width <= 0 || rect.height <= 0) return;
+
+            var targetImg = findImageByUid(cropDragState.uid);
+            if (!targetImg) return;
+
+            var scaleX = plan.canvasWidth / rect.width;
+            var scaleY = plan.canvasHeight / rect.height;
+            var deltaCanvasX = (e.clientX - cropDragState.startClientX) * scaleX;
+            var deltaCanvasY = (e.clientY - cropDragState.startClientY) * scaleY;
+
+            var changed = false;
+            if (cropDragState.canDragX && cropDragState.overflowW > 0) {
+              var nextRX = Math.max(
+                0,
+                Math.min(1, cropDragState.startRatioX - deltaCanvasX / cropDragState.overflowW)
+              );
+              if (targetImg.cropPosX !== nextRX) {
+                targetImg.cropPosX = nextRX;
+                changed = true;
+              }
+            }
+            if (cropDragState.canDragY && cropDragState.overflowH > 0) {
+              var nextRY = Math.max(
+                0,
+                Math.min(1, cropDragState.startRatioY - deltaCanvasY / cropDragState.overflowH)
+              );
+              if (targetImg.cropPosY !== nextRY) {
+                targetImg.cropPosY = nextRY;
+                changed = true;
+              }
+            }
+
+            if (changed) {
+              recomputeAndRender({ rebuildList: false });
+            }
+            return;
+          }
+
+          if (panState.active || e.pointerType !== 'mouse') return;
+          var hoverHit = findClipPlacementAtClientPoint(e.clientX, e.clientY);
+          var nextUid = hoverHit ? hoverHit.placement.uid : null;
+          if (hoveredClipUid !== nextUid) {
+            hoveredClipUid = nextUid;
+            syncCropHighlightUI();
+          }
+        });
+
+        function finishCropPointerDrag(e) {
+          if (!cropDragState.active) return;
+          if (
+            e &&
+            cropDragState.pointerId !== null &&
+            e.pointerId !== undefined &&
+            e.pointerId !== cropDragState.pointerId
+          ) {
+            return;
+          }
+          if (e && cropDragState.pointerId !== null) {
+            try {
+              el.previewCanvas.releasePointerCapture(cropDragState.pointerId);
+            } catch (_) {}
+          }
+          cropDragState.active = false;
+          cropDragState.pointerId = null;
+
+          if (e && e.pointerType === 'mouse') {
+            var hoverHit = findClipPlacementAtClientPoint(e.clientX, e.clientY);
+            hoveredClipUid = hoverHit ? hoverHit.placement.uid : null;
+          } else {
+            hoveredClipUid = null;
+          }
+          syncCropHighlightUI();
+        }
+
+        el.previewCanvas.addEventListener('pointerup', finishCropPointerDrag);
+        el.previewCanvas.addEventListener('pointercancel', finishCropPointerDrag);
+        el.previewCanvas.addEventListener('pointerleave', function () {
+          if (!cropDragState.active && hoveredClipUid !== null) {
+            hoveredClipUid = null;
+            syncCropHighlightUI();
+          }
+        });
+
+        el.previewCanvas.addEventListener('dblclick', function (e) {
+          var hit = findClipPlacementAtClientPoint(e.clientX, e.clientY);
+          if (!hit) return;
+          var targetImg = findImageByUid(hit.placement.uid);
+          if (!targetImg) return;
+          if (typeof targetImg.cropPosX === 'number' || typeof targetImg.cropPosY === 'number') {
+            targetImg.cropPosX = null;
+            targetImg.cropPosY = null;
+            recomputeAndRender({ rebuildList: false });
+            pushToast('이미지 위치를 기본 정렬로 되돌렸습니다.', 'info');
+          }
+        });
+
         // 프리뷰 드래그 패닝
         el.previewViewport.addEventListener('mousedown', function (e) {
-          if (e.button !== 0) return;
+          if (e.button !== 0 || cropDragState.active) return;
           var container = el.previewViewport;
           var canScroll =
             container.scrollWidth > container.clientWidth ||
@@ -4022,6 +4775,153 @@
         el.previewViewport.addEventListener('mouseup', stopPreviewPan);
         el.previewViewport.addEventListener('mouseleave', stopPreviewPan);
 
+        // 커스텀 플로팅 툴팁 (모든 정적/동적 title 설명을 즉시 표시)
+        var activeTooltipTarget = null;
+        var tooltipDelayTimer = null;
+
+        function sweepNativeTitles(root) {
+          var scope = root || document;
+          var nodes = scope.querySelectorAll('[title]');
+          for (var i = 0; i < nodes.length; i += 1) {
+            var raw = nodes[i].getAttribute('title') || '';
+            if (raw) {
+              nodes[i].setAttribute('data-tooltip', raw);
+            }
+            nodes[i].removeAttribute('title');
+          }
+        }
+
+        function extractTooltipText(target) {
+          if (!target) return '';
+          if (target.hasAttribute('title')) {
+            var rawTitle = target.getAttribute('title') || '';
+            if (rawTitle) {
+              target.setAttribute('data-tooltip', rawTitle);
+            }
+            target.removeAttribute('title');
+          }
+          return target.getAttribute('data-tooltip') || '';
+        }
+
+        function positionTooltipForTarget(target) {
+          if (!target || !target.isConnected) return;
+          var rect = target.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) return;
+
+          var tipEl = el.uiTooltip;
+          var tipW = tipEl.offsetWidth;
+          var tipH = tipEl.offsetHeight;
+          var gap = 8;
+          var margin = 8;
+          var vw = window.innerWidth || document.documentElement.clientWidth;
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+
+          var placement = 'top';
+          var top = rect.top - tipH - gap;
+          if (top < margin && rect.bottom + tipH + gap <= vh - margin) {
+            placement = 'bottom';
+            top = rect.bottom + gap;
+          } else if (top < margin) {
+            placement = 'bottom';
+            top = Math.max(margin, rect.bottom + gap);
+          }
+
+          var targetCenterX = rect.left + rect.width / 2;
+          var left = targetCenterX - tipW / 2;
+          left = Math.max(margin, Math.min(vw - tipW - margin, left));
+
+          var arrowX = Math.max(12, Math.min(tipW - 12, targetCenterX - left));
+
+          tipEl.setAttribute('data-placement', placement);
+          tipEl.style.left = Math.round(left) + 'px';
+          tipEl.style.top = Math.round(top) + 'px';
+          tipEl.style.setProperty('--arrow-left', Math.round(arrowX) + 'px');
+        }
+
+        function showCustomTooltip(target) {
+          if (!target || !target.isConnected || target.disabled) return;
+          var text = extractTooltipText(target);
+          if (!text) return;
+          if (target.classList.contains('item-name') && target.scrollWidth <= target.clientWidth) {
+            return;
+          }
+
+          el.uiTooltipText.textContent = text;
+          positionTooltipForTarget(target);
+          el.uiTooltip.classList.add('visible');
+          el.uiTooltip.setAttribute('aria-hidden', 'false');
+        }
+
+        function hideCustomTooltip() {
+          if (tooltipDelayTimer !== null) {
+            window.clearTimeout(tooltipDelayTimer);
+            tooltipDelayTimer = null;
+          }
+          activeTooltipTarget = null;
+          el.uiTooltip.classList.remove('visible');
+          el.uiTooltip.setAttribute('aria-hidden', 'true');
+        }
+
+        document.addEventListener('pointerover', function (e) {
+          if (e.pointerType === 'touch') return;
+          if (cropDragState.active || panState.active || state.draggingItemIndex !== null) return;
+
+          var candidate =
+            e.target && e.target.closest ? e.target.closest('[title], [data-tooltip]') : null;
+          if (candidate) {
+            extractTooltipText(candidate);
+          }
+          if (candidate === activeTooltipTarget) return;
+
+          if (tooltipDelayTimer !== null) {
+            window.clearTimeout(tooltipDelayTimer);
+            tooltipDelayTimer = null;
+          }
+
+          if (!candidate || candidate.disabled) {
+            hideCustomTooltip();
+            return;
+          }
+
+          activeTooltipTarget = candidate;
+          var isWarm = el.uiTooltip.classList.contains('visible');
+          if (isWarm) {
+            showCustomTooltip(candidate);
+          } else {
+            tooltipDelayTimer = window.setTimeout(function () {
+              tooltipDelayTimer = null;
+              if (activeTooltipTarget === candidate) {
+                showCustomTooltip(candidate);
+              }
+            }, 120);
+          }
+        });
+
+        document.addEventListener('pointerout', function (e) {
+          if (!activeTooltipTarget) return;
+          var related = e.relatedTarget;
+          if (related && activeTooltipTarget.contains(related)) return;
+          hideCustomTooltip();
+        });
+
+        document.addEventListener('pointerdown', hideCustomTooltip, true);
+
+        document.addEventListener('focusin', function (e) {
+          var candidate =
+            e.target && e.target.closest ? e.target.closest('[title], [data-tooltip]') : null;
+          if (!candidate || candidate.disabled) return;
+          extractTooltipText(candidate);
+          if (candidate.matches && candidate.matches(':focus-visible')) {
+            activeTooltipTarget = candidate;
+            showCustomTooltip(candidate);
+          }
+        });
+
+        document.addEventListener('focusout', hideCustomTooltip);
+        window.addEventListener('scroll', hideCustomTooltip, true);
+        window.addEventListener('resize', hideCustomTooltip);
+        window.addEventListener('blur', hideCustomTooltip);
+
         // 뷰포트 크기 추적 (Fit 배율 실시간 재계산)
         function updateViewportSize() {
           state.viewportWidth = el.previewViewport.clientWidth || 800;
@@ -4047,6 +4947,7 @@
         syncThemeUI();
         updateViewportSize();
         recomputeAndRender({ rebuildList: true, redrawCanvas: false });
+        sweepNativeTitles(document);
       })();
     </script>
   </body>
