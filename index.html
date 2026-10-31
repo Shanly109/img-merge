@@ -2532,46 +2532,1458 @@
           return { width: img.rawWidth, height: img.rawHeight };
         }
 
-        function decodeImageFile(file) {
-          return new Promise(function (resolve, reject) {
-            var isImage =
-              (file.type && file.type.indexOf('image/') === 0) || ACCEPTED_IMAGE_EXT.test(file.name);
-            if (!isImage) {
-              reject(new Error('이미지 파일이 아닙니다: ' + file.name));
-              return;
+        // ==================== 이미지 메타데이터 감지 및 무손실 제거 ====================
+        var PNG_SAFE_ANCILLARY = {
+          tRNS: true,
+          gAMA: true,
+          cHRM: true,
+          sRGB: true,
+          iCCP: true,
+          cICP: true,
+          mDCV: true,
+          cLLI: true,
+          sBIT: true,
+          bKGD: true,
+          pHYs: true,
+          acTL: true,
+          fcTL: true,
+          fdAT: true
+        };
+
+        var WEBP_SAFE_CHUNKS = {
+          'VP8 ': true,
+          VP8L: true,
+          VP8X: true,
+          ALPH: true,
+          ANIM: true,
+          ANMF: true,
+          ICCP: true
+        };
+
+        function asciiEquals(bytes, offset, str) {
+          if (offset < 0 || offset + str.length > bytes.length) return false;
+          for (var i = 0; i < str.length; i += 1) {
+            if (bytes[offset + i] !== str.charCodeAt(i)) return false;
+          }
+          return true;
+        }
+
+        function readAscii(bytes, offset, length) {
+          var out = '';
+          for (var i = 0; i < length; i += 1) {
+            out += String.fromCharCode(bytes[offset + i]);
+          }
+          return out;
+        }
+
+        function pushUniqueTag(list, tag) {
+          if (tag && list.indexOf(tag) === -1) {
+            list.push(tag);
+          }
+        }
+
+        function hasNonPaddingTrailingBytes(bytes, startOffset) {
+          if (startOffset >= bytes.length) return false;
+          for (var i = startOffset; i < bytes.length; i += 1) {
+            if (bytes[i] !== 0x00) return true;
+          }
+          return bytes.length - startOffset > 16;
+        }
+
+        function hasAsciiSubsequence(bytes, needle) {
+          var nLen = needle.length;
+          if (nLen === 0 || bytes.length < nLen) return false;
+          var first = needle.charCodeAt(0);
+          var maxPos = bytes.length - nLen;
+          for (var i = 0; i <= maxPos; i += 1) {
+            if (bytes[i] === first && asciiEquals(bytes, i, needle)) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        function concatByteSlices(slices, totalLength) {
+          var out = new Uint8Array(totalLength);
+          var offset = 0;
+          for (var i = 0; i < slices.length; i += 1) {
+            out.set(slices[i], offset);
+            offset += slices[i].length;
+          }
+          return out;
+        }
+
+        function parseExifOrientation(bytes, offset, byteLength) {
+          if (byteLength < 8 || offset < 0 || offset + byteLength > bytes.length) return 1;
+          if (byteLength >= 14 && asciiEquals(bytes, offset, 'Exif\x00\x00')) {
+            offset += 6;
+            byteLength -= 6;
+          }
+          var littleEndian;
+          if (bytes[offset] === 0x49 && bytes[offset + 1] === 0x49) {
+            littleEndian = true;
+          } else if (bytes[offset] === 0x4d && bytes[offset + 1] === 0x4d) {
+            littleEndian = false;
+          } else {
+            return 1;
+          }
+
+          var view = new DataView(bytes.buffer, bytes.byteOffset + offset, byteLength);
+          if (view.getUint16(2, littleEndian) !== 0x002a) return 1;
+          var ifd0Offset = view.getUint32(4, littleEndian);
+          if (ifd0Offset < 8 || ifd0Offset + 2 > byteLength) return 1;
+
+          var numEntries = view.getUint16(ifd0Offset, littleEndian);
+          for (var i = 0; i < numEntries; i += 1) {
+            var entryOffset = ifd0Offset + 2 + i * 12;
+            if (entryOffset + 12 > byteLength) break;
+            if (view.getUint16(entryOffset, littleEndian) === 0x0112) {
+              var fieldType = view.getUint16(entryOffset + 2, littleEndian);
+              var val =
+                fieldType === 4
+                  ? view.getUint32(entryOffset + 8, littleEndian)
+                  : view.getUint16(entryOffset + 8, littleEndian);
+              return val >= 1 && val <= 8 ? val : 1;
+            }
+          }
+          return 1;
+        }
+
+        function stripPngMetadata(bytes) {
+          var view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+          var kept = [bytes.subarray(0, 8)];
+          var totalLen = 8;
+          var pos = 8;
+          var sawIend = false;
+          var malformed = false;
+          var strippedCount = 0;
+          var orientation = 1;
+          var tags = [];
+
+          while (pos < bytes.length) {
+            if (pos + 12 > bytes.length) {
+              malformed = true;
+              break;
+            }
+            var chunkLen = view.getUint32(pos, false);
+            var chunkTotal = 12 + chunkLen;
+            if (chunkLen > 0x7fffffff || pos + chunkTotal > bytes.length) {
+              malformed = true;
+              break;
             }
 
-            var objectUrl = URL.createObjectURL(file);
+            var type = readAscii(bytes, pos + 4, 4);
+            var isCritical = (bytes[pos + 4] & 0x20) === 0;
+
+            if (isCritical || PNG_SAFE_ANCILLARY[type]) {
+              kept.push(bytes.subarray(pos, pos + chunkTotal));
+              totalLen += chunkTotal;
+            } else {
+              strippedCount += 1;
+              if (type === 'eXIf') {
+                pushUniqueTag(tags, 'EXIF');
+                var ori = parseExifOrientation(bytes, pos + 8, chunkLen);
+                if (ori > 1) orientation = ori;
+              } else if (type === 'iTXt') {
+                if (chunkLen >= 18 && asciiEquals(bytes, pos + 8, 'XML:com.adobe.xmp\x00')) {
+                  pushUniqueTag(tags, 'XMP');
+                } else {
+                  pushUniqueTag(tags, '텍스트');
+                }
+              } else if (type === 'tEXt' || type === 'zTXt') {
+                pushUniqueTag(tags, '텍스트');
+              } else if (type === 'caBX' || type === 'jumb' || type === 'c2pa') {
+                pushUniqueTag(tags, 'C2PA');
+              } else if (type === 'tIME') {
+                pushUniqueTag(tags, '시각');
+              } else {
+                pushUniqueTag(tags, '메타');
+              }
+            }
+
+            pos += chunkTotal;
+            if (type === 'IEND') {
+              sawIend = true;
+              if (hasNonPaddingTrailingBytes(bytes, pos)) {
+                strippedCount += 1;
+                pushUniqueTag(tags, '첨부 데이터');
+              }
+              break;
+            }
+          }
+
+          if (malformed || !sawIend) {
+            return {
+              changed: false,
+              needsCanvasStrip: strippedCount > 0,
+              bytes: bytes,
+              mimeType: 'image/png',
+              orientation: orientation,
+              tags: tags,
+              removedBytes: 0
+            };
+          }
+
+          if (strippedCount === 0) {
+            return {
+              changed: false,
+              needsCanvasStrip: false,
+              bytes: bytes,
+              mimeType: 'image/png',
+              orientation: 1,
+              tags: [],
+              removedBytes: 0
+            };
+          }
+
+          var cleanBytes = concatByteSlices(kept, totalLen);
+          return {
+            changed: true,
+            needsCanvasStrip: false,
+            bytes: cleanBytes,
+            mimeType: 'image/png',
+            orientation: orientation,
+            tags: tags,
+            removedBytes: Math.max(0, bytes.length - cleanBytes.length)
+          };
+        }
+
+        function stripJpegMetadata(bytes) {
+          var kept = [bytes.subarray(0, 2)];
+          var totalLen = 2;
+          var pos = 2;
+          var sawSos = false;
+          var sawEoi = false;
+          var malformed = false;
+          var strippedCount = 0;
+          var orientation = 1;
+          var tags = [];
+
+          while (pos < bytes.length) {
+            if (bytes[pos] !== 0xff) {
+              malformed = true;
+              break;
+            }
+            while (pos < bytes.length && bytes[pos] === 0xff) {
+              pos += 1;
+            }
+            if (pos >= bytes.length) {
+              malformed = true;
+              break;
+            }
+
+            var marker = bytes[pos];
+            var markerStart = pos - 1;
+            pos += 1;
+
+            if (marker === 0xd9) {
+              kept.push(bytes.subarray(markerStart, pos));
+              totalLen += 2;
+              sawEoi = true;
+              if (hasNonPaddingTrailingBytes(bytes, pos)) {
+                strippedCount += 1;
+                pushUniqueTag(tags, '첨부 데이터');
+              }
+              break;
+            }
+
+            if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+              kept.push(bytes.subarray(markerStart, pos));
+              totalLen += 2;
+              continue;
+            }
+
+            if (pos + 2 > bytes.length) {
+              malformed = true;
+              break;
+            }
+            var segLen = (bytes[pos] << 8) | bytes[pos + 1];
+            if (segLen < 2 || pos + segLen > bytes.length) {
+              malformed = true;
+              break;
+            }
+
+            var payloadStart = pos + 2;
+            var payloadLen = segLen - 2;
+            var segEnd = pos + segLen;
+
+            if (marker === 0xda) {
+              sawSos = true;
+              var scanPos = segEnd;
+              var foundNextMarker = false;
+              while (scanPos < bytes.length) {
+                if (bytes[scanPos] !== 0xff) {
+                  scanPos += 1;
+                  continue;
+                }
+                var ffStart = scanPos;
+                while (scanPos < bytes.length && bytes[scanPos] === 0xff) {
+                  scanPos += 1;
+                }
+                if (scanPos >= bytes.length) {
+                  break;
+                }
+                var nextByte = bytes[scanPos];
+                if (nextByte === 0x00 || (nextByte >= 0xd0 && nextByte <= 0xd7)) {
+                  scanPos += 1;
+                  continue;
+                }
+                scanPos = ffStart;
+                foundNextMarker = true;
+                break;
+              }
+              if (!foundNextMarker) {
+                malformed = true;
+                break;
+              }
+              kept.push(bytes.subarray(markerStart, scanPos));
+              totalLen += scanPos - markerStart;
+              pos = scanPos;
+              continue;
+            }
+
+            var shouldStrip = false;
+            if (marker === 0xfe) {
+              shouldStrip = true;
+              pushUniqueTag(tags, '주석');
+            } else if (marker === 0xe0) {
+              if (payloadLen >= 5 && asciiEquals(bytes, payloadStart, 'JFXX\x00')) {
+                shouldStrip = true;
+                pushUniqueTag(tags, '썸네일');
+              }
+            } else if (marker === 0xe1) {
+              shouldStrip = true;
+              if (payloadLen >= 6 && asciiEquals(bytes, payloadStart, 'Exif\x00\x00')) {
+                pushUniqueTag(tags, 'EXIF');
+                var ori = parseExifOrientation(bytes, payloadStart, payloadLen);
+                if (ori > 1) orientation = ori;
+              } else if (
+                asciiEquals(bytes, payloadStart, 'http://ns.adobe.com/xap/') ||
+                asciiEquals(bytes, payloadStart, 'http://ns.adobe.com/xmp/')
+              ) {
+                pushUniqueTag(tags, 'XMP');
+              } else {
+                pushUniqueTag(tags, '메타');
+              }
+            } else if (marker === 0xe2) {
+              if (!(payloadLen >= 12 && asciiEquals(bytes, payloadStart, 'ICC_PROFILE\x00'))) {
+                shouldStrip = true;
+                pushUniqueTag(tags, '메타');
+              }
+            } else if (marker === 0xeb) {
+              shouldStrip = true;
+              pushUniqueTag(tags, 'C2PA');
+            } else if (marker === 0xed) {
+              shouldStrip = true;
+              pushUniqueTag(tags, 'IPTC');
+            } else if (marker === 0xee) {
+              if (!(payloadLen >= 5 && asciiEquals(bytes, payloadStart, 'Adobe'))) {
+                shouldStrip = true;
+                pushUniqueTag(tags, '메타');
+              }
+            } else if (marker >= 0xe3 && marker <= 0xef) {
+              shouldStrip = true;
+              pushUniqueTag(tags, '메타');
+            }
+
+            if (shouldStrip) {
+              strippedCount += 1;
+            } else {
+              kept.push(bytes.subarray(markerStart, segEnd));
+              totalLen += segEnd - markerStart;
+            }
+            pos = segEnd;
+          }
+
+          if (malformed || !sawSos || !sawEoi) {
+            return {
+              changed: false,
+              needsCanvasStrip: strippedCount > 0,
+              bytes: bytes,
+              mimeType: 'image/jpeg',
+              orientation: orientation,
+              tags: tags,
+              removedBytes: 0
+            };
+          }
+
+          if (strippedCount === 0) {
+            return {
+              changed: false,
+              needsCanvasStrip: false,
+              bytes: bytes,
+              mimeType: 'image/jpeg',
+              orientation: 1,
+              tags: [],
+              removedBytes: 0
+            };
+          }
+
+          var cleanBytes = concatByteSlices(kept, totalLen);
+          return {
+            changed: true,
+            needsCanvasStrip: false,
+            bytes: cleanBytes,
+            mimeType: 'image/jpeg',
+            orientation: orientation,
+            tags: tags,
+            removedBytes: Math.max(0, bytes.length - cleanBytes.length)
+          };
+        }
+
+        function stripWebpMetadata(bytes) {
+          var view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+          var riffSize = view.getUint32(4, true);
+          var limit = Math.min(bytes.length, 8 + riffSize);
+          var chunks = [];
+          var pos = 12;
+          var malformed = false;
+          var hasImageChunk = false;
+          var strippedCount = 0;
+          var orientation = 1;
+          var tags = [];
+
+          if (hasNonPaddingTrailingBytes(bytes, limit)) {
+            strippedCount += 1;
+            pushUniqueTag(tags, '첨부 데이터');
+          }
+
+          while (pos < limit) {
+            if (pos + 8 > limit) {
+              malformed = true;
+              break;
+            }
+            var fourCC = readAscii(bytes, pos, 4);
+            var chunkSize = view.getUint32(pos + 4, true);
+            var paddedSize = chunkSize + (chunkSize & 1);
+            var chunkEnd = pos + 8 + paddedSize;
+
+            if (chunkEnd > limit) {
+              if (pos + 8 + chunkSize === limit) {
+                chunkEnd = limit;
+              } else {
+                malformed = true;
+                break;
+              }
+            }
+
+            if (WEBP_SAFE_CHUNKS[fourCC]) {
+              if (fourCC === 'VP8 ' || fourCC === 'VP8L' || fourCC === 'ANMF') {
+                hasImageChunk = true;
+              }
+              chunks.push({
+                fourCC: fourCC,
+                start: pos,
+                chunkSize: chunkSize,
+                paddedSize: paddedSize
+              });
+            } else {
+              strippedCount += 1;
+              if (fourCC === 'EXIF') {
+                pushUniqueTag(tags, 'EXIF');
+                var ori = parseExifOrientation(bytes, pos + 8, chunkSize);
+                if (ori > 1) orientation = ori;
+              } else if (fourCC === 'XMP ') {
+                pushUniqueTag(tags, 'XMP');
+              } else if (fourCC === 'C2PA' || fourCC === 'JUMB') {
+                pushUniqueTag(tags, 'C2PA');
+              } else {
+                pushUniqueTag(tags, '메타');
+              }
+            }
+            pos = chunkEnd;
+          }
+
+          if (malformed || !hasImageChunk) {
+            return {
+              changed: false,
+              needsCanvasStrip: strippedCount > 0,
+              bytes: bytes,
+              mimeType: 'image/webp',
+              orientation: orientation,
+              tags: tags,
+              removedBytes: 0
+            };
+          }
+
+          if (strippedCount === 0) {
+            return {
+              changed: false,
+              needsCanvasStrip: false,
+              bytes: bytes,
+              mimeType: 'image/webp',
+              orientation: 1,
+              tags: [],
+              removedBytes: 0
+            };
+          }
+
+          var newRiffPayload = 4;
+          for (var i = 0; i < chunks.length; i += 1) {
+            newRiffPayload += 8 + chunks[i].paddedSize;
+          }
+
+          var cleanBytes = new Uint8Array(8 + newRiffPayload);
+          cleanBytes.set(bytes.subarray(0, 12), 0);
+          var outView = new DataView(cleanBytes.buffer);
+          outView.setUint32(4, newRiffPayload, true);
+
+          var writePos = 12;
+          for (var c = 0; c < chunks.length; c += 1) {
+            var ck = chunks[c];
+            var copyLen = Math.min(8 + ck.chunkSize, bytes.length - ck.start);
+            cleanBytes.set(bytes.subarray(ck.start, ck.start + copyLen), writePos);
+            if (ck.fourCC === 'VP8X' && ck.chunkSize >= 10) {
+              cleanBytes[writePos + 8] &= ~(0x08 | 0x04);
+            }
+            writePos += 8 + ck.paddedSize;
+          }
+
+          return {
+            changed: true,
+            needsCanvasStrip: false,
+            bytes: cleanBytes,
+            mimeType: 'image/webp',
+            orientation: orientation,
+            tags: tags,
+            removedBytes: Math.max(0, bytes.length - cleanBytes.length)
+          };
+        }
+
+        function skipGifSubBlocks(bytes, startPos) {
+          var p = startPos;
+          while (p < bytes.length) {
+            var blockSize = bytes[p];
+            p += 1;
+            if (blockSize === 0) return p;
+            p += blockSize;
+          }
+          return -1;
+        }
+
+        function findGifXmpEnd(bytes, startPos) {
+          var maxStart = bytes.length - 258;
+          for (var t = startPos; t <= maxStart; t += 1) {
+            if (
+              bytes[t] === 0x01 &&
+              bytes[t + 1] === 0xff &&
+              bytes[t + 256] === 0x00 &&
+              bytes[t + 257] === 0x00
+            ) {
+              var validTrailer = true;
+              for (var k = 2; k <= 255; k += 1) {
+                if (bytes[t + k] !== 256 - k) {
+                  validTrailer = false;
+                  break;
+                }
+              }
+              if (validTrailer) return t + 258;
+            }
+          }
+          return skipGifSubBlocks(bytes, startPos);
+        }
+
+        function stripGifMetadata(bytes) {
+          if (bytes.length < 14) {
+            return {
+              changed: false,
+              needsCanvasStrip: false,
+              bytes: bytes,
+              mimeType: 'image/gif',
+              orientation: 1,
+              tags: [],
+              removedBytes: 0
+            };
+          }
+
+          var gctFlag = (bytes[10] & 0x80) !== 0;
+          var gctSize = gctFlag ? 3 * (1 << ((bytes[10] & 0x07) + 1)) : 0;
+          var headerEnd = 13 + gctSize;
+          if (headerEnd > bytes.length) {
+            return {
+              changed: false,
+              needsCanvasStrip: false,
+              bytes: bytes,
+              mimeType: 'image/gif',
+              orientation: 1,
+              tags: [],
+              removedBytes: 0
+            };
+          }
+
+          var kept = [bytes.subarray(0, headerEnd)];
+          var totalLen = headerEnd;
+          var pos = headerEnd;
+          var sawTrailer = false;
+          var malformed = false;
+          var strippedCount = 0;
+          var tags = [];
+
+          while (pos < bytes.length) {
+            var intro = bytes[pos];
+            if (intro === 0x3b) {
+              kept.push(bytes.subarray(pos, pos + 1));
+              totalLen += 1;
+              sawTrailer = true;
+              if (hasNonPaddingTrailingBytes(bytes, pos + 1)) {
+                strippedCount += 1;
+                pushUniqueTag(tags, '첨부 데이터');
+              }
+              break;
+            }
+
+            if (intro === 0x2c) {
+              if (pos + 10 > bytes.length) {
+                malformed = true;
+                break;
+              }
+              var lctFlag = (bytes[pos + 9] & 0x80) !== 0;
+              var lctSize = lctFlag ? 3 * (1 << ((bytes[pos + 9] & 0x07) + 1)) : 0;
+              var lzwStart = pos + 10 + lctSize + 1;
+              if (lzwStart > bytes.length) {
+                malformed = true;
+                break;
+              }
+              var imgEnd = skipGifSubBlocks(bytes, lzwStart);
+              if (imgEnd < 0 || imgEnd > bytes.length) {
+                malformed = true;
+                break;
+              }
+              kept.push(bytes.subarray(pos, imgEnd));
+              totalLen += imgEnd - pos;
+              pos = imgEnd;
+              continue;
+            }
+
+            if (intro === 0x21) {
+              if (pos + 2 > bytes.length) {
+                malformed = true;
+                break;
+              }
+              var label = bytes[pos + 1];
+              if (label === 0xfe) {
+                var commentEnd = skipGifSubBlocks(bytes, pos + 2);
+                if (commentEnd < 0 || commentEnd > bytes.length) {
+                  malformed = true;
+                  break;
+                }
+                strippedCount += 1;
+                pushUniqueTag(tags, '주석');
+                pos = commentEnd;
+                continue;
+              }
+
+              if (
+                label === 0xff &&
+                pos + 14 <= bytes.length &&
+                bytes[pos + 2] === 0x0b &&
+                asciiEquals(bytes, pos + 3, 'XMP DataXMP')
+              ) {
+                var xmpEnd = findGifXmpEnd(bytes, pos + 14);
+                if (xmpEnd < 0 || xmpEnd > bytes.length) {
+                  malformed = true;
+                  break;
+                }
+                strippedCount += 1;
+                pushUniqueTag(tags, 'XMP');
+                pos = xmpEnd;
+                continue;
+              }
+
+              var extEnd = skipGifSubBlocks(bytes, pos + 2);
+              if (extEnd < 0 || extEnd > bytes.length) {
+                malformed = true;
+                break;
+              }
+              kept.push(bytes.subarray(pos, extEnd));
+              totalLen += extEnd - pos;
+              pos = extEnd;
+              continue;
+            }
+
+            malformed = true;
+            break;
+          }
+
+          if (malformed || !sawTrailer || strippedCount === 0) {
+            return {
+              changed: false,
+              needsCanvasStrip: malformed && strippedCount > 0,
+              bytes: bytes,
+              mimeType: 'image/gif',
+              orientation: 1,
+              tags: strippedCount > 0 ? tags : [],
+              removedBytes: 0
+            };
+          }
+
+          var cleanBytes = concatByteSlices(kept, totalLen);
+          return {
+            changed: true,
+            needsCanvasStrip: false,
+            bytes: cleanBytes,
+            mimeType: 'image/gif',
+            orientation: 1,
+            tags: tags,
+            removedBytes: Math.max(0, bytes.length - cleanBytes.length)
+          };
+        }
+
+        function stripSvgMetadata(bytes) {
+          if (typeof TextDecoder === 'undefined' || typeof TextEncoder === 'undefined') {
+            return null;
+          }
+          var text = new TextDecoder('utf-8').decode(bytes);
+          if (text.indexOf('<svg') === -1) return null;
+
+          var tags = [];
+          var cleaned = text;
+          var xmpRe = /<(?:x:xmpmeta|rdf:RDF)\b[\s\S]*?<\/(?:x:xmpmeta|rdf:RDF)>/gi;
+          if (xmpRe.test(cleaned)) {
+            cleaned = cleaned.replace(xmpRe, '');
+            pushUniqueTag(tags, 'XMP');
+          }
+          var metaRe = /<metadata\b[\s\S]*?<\/metadata>/gi;
+          if (metaRe.test(cleaned)) {
+            cleaned = cleaned.replace(metaRe, '');
+            if (tags.length === 0) pushUniqueTag(tags, '메타');
+          }
+
+          if (cleaned === text) {
+            return {
+              changed: false,
+              needsCanvasStrip: false,
+              bytes: bytes,
+              mimeType: 'image/svg+xml',
+              orientation: 1,
+              tags: [],
+              removedBytes: 0
+            };
+          }
+
+          var cleanBytes = new TextEncoder().encode(cleaned);
+          return {
+            changed: true,
+            needsCanvasStrip: false,
+            bytes: cleanBytes,
+            mimeType: 'image/svg+xml',
+            orientation: 1,
+            tags: tags,
+            removedBytes: Math.max(0, bytes.length - cleanBytes.length)
+          };
+        }
+
+        function stripImageMetadataBuffer(arrayBuffer, mimeType, fileName) {
+          var bytes = new Uint8Array(arrayBuffer);
+
+          if (
+            bytes.length >= 33 &&
+            bytes[0] === 0x89 &&
+            bytes[1] === 0x50 &&
+            bytes[2] === 0x4e &&
+            bytes[3] === 0x47 &&
+            bytes[4] === 0x0d &&
+            bytes[5] === 0x0a &&
+            bytes[6] === 0x1a &&
+            bytes[7] === 0x0a
+          ) {
+            return stripPngMetadata(bytes);
+          }
+
+          if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+            return stripJpegMetadata(bytes);
+          }
+
+          if (
+            bytes.length >= 20 &&
+            asciiEquals(bytes, 0, 'RIFF') &&
+            asciiEquals(bytes, 8, 'WEBP')
+          ) {
+            return stripWebpMetadata(bytes);
+          }
+
+          if (
+            bytes.length >= 14 &&
+            (asciiEquals(bytes, 0, 'GIF87a') || asciiEquals(bytes, 0, 'GIF89a'))
+          ) {
+            return stripGifMetadata(bytes);
+          }
+
+          if (
+            (mimeType && mimeType.indexOf('svg') !== -1) ||
+            (fileName && /\.svg$/i.test(fileName))
+          ) {
+            var svgRes = stripSvgMetadata(bytes);
+            if (svgRes) return svgRes;
+          }
+
+          var fallbackTags = [];
+          if (hasAsciiSubsequence(bytes, 'Exif\x00')) {
+            pushUniqueTag(fallbackTags, 'EXIF');
+          }
+          if (
+            hasAsciiSubsequence(bytes, 'http://ns.adobe.com/xap/1.0/') ||
+            hasAsciiSubsequence(bytes, '<x:xmpmeta')
+          ) {
+            pushUniqueTag(fallbackTags, 'XMP');
+          }
+          if (hasAsciiSubsequence(bytes, 'urn:c2pa')) {
+            pushUniqueTag(fallbackTags, 'C2PA');
+          }
+
+          return {
+            changed: false,
+            needsCanvasStrip: fallbackTags.length > 0,
+            bytes: bytes,
+            mimeType: mimeType || 'image/png',
+            orientation: 1,
+            tags: fallbackTags,
+            removedBytes: 0
+          };
+        }
+
+        // ==================== 스텔스 픽셀 메타데이터 (NovelAI / WebUI LSB) 감지 및 제거 ====================
+        function getStealthProbeSize(fullW, fullH) {
+          var needCols = Math.ceil(152 / Math.max(1, fullH));
+          var needRows = Math.ceil(152 / Math.max(1, fullW));
+          return {
+            probeW: Math.min(fullW, Math.max(needCols, Math.min(fullW, 152))),
+            probeH: Math.min(fullH, Math.max(needRows, Math.min(fullH, 152)))
+          };
+        }
+
+        function getStealthPixelOffset(k, order, fullW, fullH, strideW) {
+          var x;
+          var y;
+          if (order === 'col') {
+            x = Math.floor(k / fullH);
+            y = k % fullH;
+          } else {
+            y = Math.floor(k / fullW);
+            x = k % fullW;
+          }
+          if (x >= strideW) return -1;
+          var idx = (y * strideW + x) * 4;
+          return idx;
+        }
+
+        function detectStealthInRgba(data, fullW, fullH, strideW) {
+          var totalPixels = fullW * fullH;
+          var detections = [];
+          var orders = ['col', 'row'];
+
+          for (var o = 0; o < orders.length; o += 1) {
+            var order = orders[o];
+
+            if (totalPixels >= 152) {
+              var sigA = '';
+              var validA = true;
+              for (var byteIdx = 0; byteIdx < 15; byteIdx += 1) {
+                var codeA = 0;
+                for (var bit = 0; bit < 8; bit += 1) {
+                  var offA = getStealthPixelOffset(byteIdx * 8 + bit, order, fullW, fullH, strideW);
+                  if (offA < 0 || offA + 3 >= data.length) {
+                    validA = false;
+                    break;
+                  }
+                  codeA = (codeA << 1) | (data[offA + 3] & 1);
+                }
+                if (!validA) break;
+                sigA += String.fromCharCode(codeA);
+              }
+
+              if (validA && (sigA === 'stealth_pngcomp' || sigA === 'stealth_pnginfo')) {
+                var lenA = 0;
+                for (var lb = 0; lb < 32; lb += 1) {
+                  var lOffA = getStealthPixelOffset(120 + lb, order, fullW, fullH, strideW);
+                  if (lOffA < 0 || lOffA + 3 >= data.length) {
+                    validA = false;
+                    break;
+                  }
+                  lenA = lenA * 2 + (data[lOffA + 3] & 1);
+                }
+                if (validA) {
+                  detections.push({
+                    mode: 'alpha',
+                    order: order,
+                    signature: sigA,
+                    paramBitLen: lenA
+                  });
+                }
+              }
+            }
+
+            if (totalPixels * 3 >= 152) {
+              var sigRgb = '';
+              var validRgb = true;
+              for (var rByte = 0; rByte < 15; rByte += 1) {
+                var codeRgb = 0;
+                for (var rBit = 0; rBit < 8; rBit += 1) {
+                  var bitPos = rByte * 8 + rBit;
+                  var pxIdx = Math.floor(bitPos / 3);
+                  var ch = bitPos % 3;
+                  var offRgb = getStealthPixelOffset(pxIdx, order, fullW, fullH, strideW);
+                  if (offRgb < 0 || offRgb + ch >= data.length) {
+                    validRgb = false;
+                    break;
+                  }
+                  codeRgb = (codeRgb << 1) | (data[offRgb + ch] & 1);
+                }
+                if (!validRgb) break;
+                sigRgb += String.fromCharCode(codeRgb);
+              }
+
+              if (validRgb && (sigRgb === 'stealth_rgbcomp' || sigRgb === 'stealth_rgbinfo')) {
+                var lenRgb = 0;
+                for (var rlb = 0; rlb < 32; rlb += 1) {
+                  var lBitPos = 120 + rlb;
+                  var lPxIdx = Math.floor(lBitPos / 3);
+                  var lCh = lBitPos % 3;
+                  var lOffRgb = getStealthPixelOffset(lPxIdx, order, fullW, fullH, strideW);
+                  if (lOffRgb < 0 || lOffRgb + lCh >= data.length) {
+                    validRgb = false;
+                    break;
+                  }
+                  lenRgb = lenRgb * 2 + (data[lOffRgb + lCh] & 1);
+                }
+                if (validRgb) {
+                  detections.push({
+                    mode: 'rgb',
+                    order: order,
+                    signature: sigRgb,
+                    paramBitLen: lenRgb
+                  });
+                }
+              }
+            }
+          }
+
+          return detections;
+        }
+
+        function wipeStealthInRgba(data, fullW, fullH, detections) {
+          var totalPixels = fullW * fullH;
+          var wipedAlphaAll = false;
+
+          for (var d = 0; d < detections.length; d += 1) {
+            var det = detections[d];
+            if (det.mode === 'alpha') {
+              if (!wipedAlphaAll) {
+                // NovelAI / Stealth PNGInfo가 투명도 LSB에 기록한 254 알파값(본문 + FEC 서명)을 원래 불투명(255)으로 복원
+                for (var p = 3; p < data.length; p += 4) {
+                  if (data[p] === 254) {
+                    data[p] = 255;
+                  }
+                }
+                wipedAlphaAll = true;
+              }
+              var alphaSpan =
+                det.paramBitLen > 0 && det.paramBitLen <= totalPixels
+                  ? 152 + det.paramBitLen
+                  : Math.min(totalPixels, 8192);
+              var alphaLimit = Math.min(totalPixels, alphaSpan);
+              for (var k = 0; k < alphaLimit; k += 1) {
+                var aOff = getStealthPixelOffset(k, det.order, fullW, fullH, fullW);
+                if (aOff >= 0 && aOff + 3 < data.length && data[aOff + 3] > 0) {
+                  data[aOff + 3] |= 1;
+                }
+              }
+            } else if (det.mode === 'rgb') {
+              var maxRgbBits = totalPixels * 3;
+              var rgbSpan =
+                det.paramBitLen > 0 && det.paramBitLen <= maxRgbBits
+                  ? 152 + det.paramBitLen
+                  : Math.min(maxRgbBits, 8192);
+              var rgbLimit = Math.min(maxRgbBits, rgbSpan);
+              for (var b = 0; b < rgbLimit; b += 1) {
+                var px = Math.floor(b / 3);
+                var ch = b % 3;
+                var rOff = getStealthPixelOffset(px, det.order, fullW, fullH, fullW);
+                if (rOff >= 0 && rOff + ch < data.length) {
+                  data[rOff + ch] &= 0xfe;
+                }
+              }
+            }
+          }
+        }
+
+        function cleanStealthOnCanvas(canvas) {
+          var w = canvas.width;
+          var h = canvas.height;
+          if (w <= 0 || h <= 0) return false;
+          var ctx = canvas.getContext('2d');
+          if (!ctx) return false;
+
+          try {
+            var probe = getStealthProbeSize(w, h);
+            var probeData = ctx.getImageData(0, 0, probe.probeW, probe.probeH);
+            var detections = detectStealthInRgba(probeData.data, w, h, probe.probeW);
+            if (detections.length === 0) return false;
+
+            var fullData = ctx.getImageData(0, 0, w, h);
+            wipeStealthInRgba(fullData.data, w, h, detections);
+            ctx.putImageData(fullData, 0, 0);
+            return true;
+          } catch (_) {
+            return false;
+          }
+        }
+
+        function probeHtmlImageHasStealth(img) {
+          var w = img.naturalWidth;
+          var h = img.naturalHeight;
+          if (!w || !h) return false;
+          if (w > MAX_CANVAS_SIDE || h > MAX_CANVAS_SIDE || w * h > MAX_CANVAS_AREA) return false;
+
+          var probe = getStealthProbeSize(w, h);
+          var probeCanvas = document.createElement('canvas');
+          probeCanvas.width = probe.probeW;
+          probeCanvas.height = probe.probeH;
+          var pCtx = probeCanvas.getContext('2d', { willReadFrequently: true });
+          if (!pCtx) return false;
+
+          try {
+            pCtx.imageSmoothingEnabled = false;
+            pCtx.globalCompositeOperation = 'copy';
+            pCtx.drawImage(
+              img,
+              0,
+              0,
+              probe.probeW,
+              probe.probeH,
+              0,
+              0,
+              probe.probeW,
+              probe.probeH
+            );
+            var imgData = pCtx.getImageData(0, 0, probe.probeW, probe.probeH);
+            var detections = detectStealthInRgba(imgData.data, w, h, probe.probeW);
+            return detections.length > 0;
+          } catch (_) {
+            return false;
+          } finally {
+            probeCanvas.width = 0;
+            probeCanvas.height = 0;
+          }
+        }
+
+        var CRC32_TABLE = null;
+
+        function computePngChunkCrc(typeBytes, dataBytes) {
+          if (!CRC32_TABLE) {
+            CRC32_TABLE = new Uint32Array(256);
+            for (var n = 0; n < 256; n += 1) {
+              var c = n;
+              for (var k = 0; k < 8; k += 1) {
+                c = (c & 1) !== 0 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+              }
+              CRC32_TABLE[n] = c >>> 0;
+            }
+          }
+          var crc = 0xffffffff;
+          for (var i = 0; i < 4; i += 1) {
+            crc = CRC32_TABLE[(crc ^ typeBytes[i]) & 0xff] ^ (crc >>> 8);
+          }
+          for (var j = 0; j < dataBytes.length; j += 1) {
+            crc = CRC32_TABLE[(crc ^ dataBytes[j]) & 0xff] ^ (crc >>> 8);
+          }
+          return (crc ^ 0xffffffff) >>> 0;
+        }
+
+        function paethPredictor(a, b, c) {
+          var p = a + b - c;
+          var pa = p >= a ? p - a : a - p;
+          var pb = p >= b ? p - b : b - p;
+          var pc = p >= c ? p - c : c - p;
+          if (pa <= pb && pa <= pc) return a;
+          return pb <= pc ? b : c;
+        }
+
+        async function runZlibStream(inputBytes, mode) {
+          var stream =
+            mode === 'decompress'
+              ? new DecompressionStream('deflate')
+              : new CompressionStream('deflate');
+          var writer = stream.writable.getWriter();
+          var writePromise = writer.write(inputBytes).then(function () {
+            return writer.close();
+          });
+          var bufPromise = new Response(stream.readable).arrayBuffer();
+          var results = await Promise.all([bufPromise, writePromise]);
+          return new Uint8Array(results[0]);
+        }
+
+        // PNG IDAT 스트림에서 직접 스텔스 LSB 제거 (프리멀티플라이 알파 반올림 오차조차 없는 100% 비트 무손실)
+        async function stripPngPixelStealthBinary(pngBytes) {
+          if (
+            typeof DecompressionStream === 'undefined' ||
+            typeof CompressionStream === 'undefined' ||
+            typeof Response === 'undefined' ||
+            pngBytes.length < 33
+          ) {
+            return { checked: false, changed: false, bytes: pngBytes };
+          }
+
+          var view = new DataView(pngBytes.buffer, pngBytes.byteOffset, pngBytes.byteLength);
+          if (readAscii(pngBytes, 12, 4) !== 'IHDR' || view.getUint32(8, false) !== 13) {
+            return { checked: false, changed: false, bytes: pngBytes };
+          }
+
+          var width = view.getUint32(16, false);
+          var height = view.getUint32(20, false);
+          var bitDepth = pngBytes[24];
+          var colorType = pngBytes[25];
+          var compression = pngBytes[26];
+          var filterMethod = pngBytes[27];
+          var interlace = pngBytes[28];
+
+          if (
+            !width ||
+            !height ||
+            bitDepth !== 8 ||
+            (colorType !== 6 && colorType !== 2) ||
+            compression !== 0 ||
+            filterMethod !== 0 ||
+            interlace !== 0 ||
+            width * height > MAX_CANVAS_AREA
+          ) {
+            return { checked: false, changed: false, bytes: pngBytes };
+          }
+
+          var preChunks = [pngBytes.subarray(0, 8)];
+          var preLen = 8;
+          var idatParts = [];
+          var idatTotal = 0;
+          var postChunks = [];
+          var postLen = 0;
+          var seenIdat = false;
+          var pos = 8;
+
+          while (pos + 12 <= pngBytes.length) {
+            var cLen = view.getUint32(pos, false);
+            var cTotal = 12 + cLen;
+            if (pos + cTotal > pngBytes.length) {
+              return { checked: false, changed: false, bytes: pngBytes };
+            }
+            var cType = readAscii(pngBytes, pos + 4, 4);
+            if (cType === 'acTL' || cType === 'fcTL' || cType === 'fdAT') {
+              return { checked: false, changed: false, bytes: pngBytes };
+            }
+            if (cType === 'IDAT') {
+              seenIdat = true;
+              idatParts.push(pngBytes.subarray(pos + 8, pos + 8 + cLen));
+              idatTotal += cLen;
+            } else if (!seenIdat) {
+              preChunks.push(pngBytes.subarray(pos, pos + cTotal));
+              preLen += cTotal;
+            } else {
+              postChunks.push(pngBytes.subarray(pos, pos + cTotal));
+              postLen += cTotal;
+            }
+            pos += cTotal;
+            if (cType === 'IEND') break;
+          }
+
+          if (idatTotal === 0) {
+            return { checked: false, changed: false, bytes: pngBytes };
+          }
+
+          var bpp = colorType === 6 ? 4 : 3;
+          var rowBytes = width * bpp;
+          var expectedScanLen = height * (1 + rowBytes);
+
+          var scanBytes;
+          try {
+            var compressedIdat =
+              idatParts.length === 1 ? idatParts[0] : concatByteSlices(idatParts, idatTotal);
+            scanBytes = await runZlibStream(compressedIdat, 'decompress');
+          } catch (_) {
+            return { checked: false, changed: false, bytes: pngBytes };
+          }
+
+          if (scanBytes.length !== expectedScanLen) {
+            return { checked: false, changed: false, bytes: pngBytes };
+          }
+
+          var rgba = new Uint8Array(width * height * 4);
+          var rawRowPrev = new Uint8Array(rowBytes);
+          var rawRowCurr = new Uint8Array(rowBytes);
+
+          for (var y = 0; y < height; y += 1) {
+            var rowStart = y * (1 + rowBytes);
+            var fType = scanBytes[rowStart];
+            if (fType > 4) {
+              return { checked: false, changed: false, bytes: pngBytes };
+            }
+
+            for (var x = 0; x < rowBytes; x += 1) {
+              var raw = scanBytes[rowStart + 1 + x];
+              var left = x >= bpp ? rawRowCurr[x - bpp] : 0;
+              var up = y > 0 ? rawRowPrev[x] : 0;
+              var upLeft = y > 0 && x >= bpp ? rawRowPrev[x - bpp] : 0;
+              var val;
+              if (fType === 0) val = raw;
+              else if (fType === 1) val = (raw + left) & 0xff;
+              else if (fType === 2) val = (raw + up) & 0xff;
+              else if (fType === 3) val = (raw + ((left + up) >> 1)) & 0xff;
+              else val = (raw + paethPredictor(left, up, upLeft)) & 0xff;
+              rawRowCurr[x] = val;
+            }
+
+            var rgbaRowOffset = y * width * 4;
+            if (bpp === 4) {
+              rgba.set(rawRowCurr, rgbaRowOffset);
+            } else {
+              for (var px = 0; px < width; px += 1) {
+                var sIdx = px * 3;
+                var dIdx = rgbaRowOffset + px * 4;
+                rgba[dIdx] = rawRowCurr[sIdx];
+                rgba[dIdx + 1] = rawRowCurr[sIdx + 1];
+                rgba[dIdx + 2] = rawRowCurr[sIdx + 2];
+                rgba[dIdx + 3] = 255;
+              }
+            }
+
+            var tmp = rawRowPrev;
+            rawRowPrev = rawRowCurr;
+            rawRowCurr = tmp;
+          }
+
+          var detections = detectStealthInRgba(rgba, width, height, width);
+          if (detections.length === 0) {
+            return { checked: true, changed: false, bytes: pngBytes };
+          }
+
+          wipeStealthInRgba(rgba, width, height, detections);
+
+          var outScan = new Uint8Array(expectedScanLen);
+          var prevOutRow = new Uint8Array(rowBytes);
+          var currOutRow = new Uint8Array(rowBytes);
+
+          for (var oy = 0; oy < height; oy += 1) {
+            var srcRgbaOff = oy * width * 4;
+            if (bpp === 4) {
+              currOutRow.set(rgba.subarray(srcRgbaOff, srcRgbaOff + rowBytes));
+            } else {
+              for (var opx = 0; opx < width; opx += 1) {
+                var osIdx = srcRgbaOff + opx * 4;
+                var odIdx = opx * 3;
+                currOutRow[odIdx] = rgba[osIdx];
+                currOutRow[odIdx + 1] = rgba[osIdx + 1];
+                currOutRow[odIdx + 2] = rgba[osIdx + 2];
+              }
+            }
+
+            var outRowStart = oy * (1 + rowBytes);
+            var usePaeth = oy > 0;
+            outScan[outRowStart] = usePaeth ? 4 : 1;
+            for (var ox = 0; ox < rowBytes; ox += 1) {
+              var curVal = currOutRow[ox];
+              var oLeft = ox >= bpp ? currOutRow[ox - bpp] : 0;
+              if (!usePaeth) {
+                outScan[outRowStart + 1 + ox] = (curVal - oLeft) & 0xff;
+              } else {
+                var oUp = prevOutRow[ox];
+                var oUpLeft = ox >= bpp ? prevOutRow[ox - bpp] : 0;
+                outScan[outRowStart + 1 + ox] =
+                  (curVal - paethPredictor(oLeft, oUp, oUpLeft)) & 0xff;
+              }
+            }
+
+            var swapRow = prevOutRow;
+            prevOutRow = currOutRow;
+            currOutRow = swapRow;
+          }
+
+          var recompressed;
+          try {
+            recompressed = await runZlibStream(outScan, 'compress');
+          } catch (_) {
+            return { checked: false, changed: false, bytes: pngBytes };
+          }
+
+          var idatType = new Uint8Array([0x49, 0x44, 0x41, 0x54]);
+          var newIdatChunk = new Uint8Array(12 + recompressed.length);
+          var idatView = new DataView(newIdatChunk.buffer);
+          idatView.setUint32(0, recompressed.length, false);
+          newIdatChunk.set(idatType, 4);
+          newIdatChunk.set(recompressed, 8);
+          idatView.setUint32(
+            8 + recompressed.length,
+            computePngChunkCrc(idatType, recompressed),
+            false
+          );
+
+          var allSlices = preChunks.concat([newIdatChunk], postChunks);
+          var finalPng = concatByteSlices(allSlices, preLen + newIdatChunk.length + postLen);
+          return { checked: true, changed: true, bytes: finalPng };
+        }
+
+        async function ensureCleanExportBlob(blob) {
+          if (!blob || typeof blob.arrayBuffer !== 'function') return blob;
+          try {
+            var buf = await blob.arrayBuffer();
+            var stripped = stripImageMetadataBuffer(buf, blob.type, '');
+            if (stripped.changed) {
+              return new Blob([stripped.bytes], { type: stripped.mimeType || blob.type });
+            }
+          } catch (_) {}
+          return blob;
+        }
+
+        function loadHtmlImageFromBlob(blob, fileName) {
+          return new Promise(function (resolve, reject) {
+            var url = URL.createObjectURL(blob);
             var img = new Image();
             img.decoding = 'async';
             img.onload = function () {
               if (!img.naturalWidth || !img.naturalHeight) {
-                URL.revokeObjectURL(objectUrl);
-                reject(new Error('유효하지 않은 이미지 해상도입니다: ' + file.name));
+                URL.revokeObjectURL(url);
+                reject(new Error('유효하지 않은 이미지 해상도입니다: ' + fileName));
                 return;
               }
-              resolve({
-                uid: Date.now() + '-' + Math.random().toString(36).slice(2, 9),
-                name: file.name || 'clipboard-image.png',
-                mimeType: file.type || 'image/png',
-                fileSize: file.size,
-                objectUrl: objectUrl,
-                element: img,
-                rawWidth: img.naturalWidth,
-                rawHeight: img.naturalHeight,
-                rotation: 0,
-                flipX: false,
-                flipY: false,
-                cropPosX: null,
-                cropPosY: null
-              });
+              resolve({ img: img, objectUrl: url });
             };
             img.onerror = function () {
-              URL.revokeObjectURL(objectUrl);
-              reject(new Error('이미지를 디코딩할 수 없습니다: ' + file.name));
+              URL.revokeObjectURL(url);
+              reject(new Error('이미지를 디코딩할 수 없습니다: ' + fileName));
             };
-            img.src = objectUrl;
+            img.src = url;
           });
+        }
+
+        async function bakeCleanPixelsFromBlob(sourceBlob, fileName) {
+          var loaded = await loadHtmlImageFromBlob(sourceBlob, fileName);
+          var w = loaded.img.naturalWidth;
+          var h = loaded.img.naturalHeight;
+          if (w > MAX_CANVAS_SIDE || h > MAX_CANVAS_SIDE || w * h > MAX_CANVAS_AREA) {
+            return { loaded: loaded, blobSize: sourceBlob.size, baked: false };
+          }
+
+          var canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          var ctx = canvas.getContext('2d');
+          if (!ctx) {
+            return { loaded: loaded, blobSize: sourceBlob.size, baked: false };
+          }
+          ctx.imageSmoothingEnabled = false;
+          ctx.globalCompositeOperation = 'copy';
+          ctx.drawImage(loaded.img, 0, 0, w, h);
+          URL.revokeObjectURL(loaded.objectUrl);
+
+          cleanStealthOnCanvas(canvas);
+
+          var rawPngBlob = await canvasToBlobAsync(canvas, 'image/png');
+          canvas.width = 0;
+          canvas.height = 0;
+
+          var cleanBlob = await ensureCleanExportBlob(rawPngBlob);
+          var cleanLoaded = await loadHtmlImageFromBlob(cleanBlob, fileName);
+          return { loaded: cleanLoaded, blobSize: cleanBlob.size, baked: true };
+        }
+
+        async function decodeImageFile(file) {
+          var displayName = file.name || 'clipboard-image.png';
+          var isImage =
+            (file.type && file.type.indexOf('image/') === 0) || ACCEPTED_IMAGE_EXT.test(displayName);
+          if (!isImage) {
+            throw new Error('이미지 파일이 아닙니다: ' + displayName);
+          }
+
+          var metaRes = null;
+          var pngStealthChecked = false;
+          if (typeof file.arrayBuffer === 'function') {
+            try {
+              var rawBuffer = await file.arrayBuffer();
+              metaRes = stripImageMetadataBuffer(rawBuffer, file.type, displayName);
+              if (
+                metaRes &&
+                metaRes.mimeType === 'image/png' &&
+                !metaRes.needsCanvasStrip &&
+                metaRes.orientation <= 1
+              ) {
+                var pngStealth = await stripPngPixelStealthBinary(metaRes.bytes);
+                pngStealthChecked = pngStealth.checked;
+                if (pngStealth.changed) {
+                  metaRes = {
+                    changed: true,
+                    needsCanvasStrip: false,
+                    bytes: pngStealth.bytes,
+                    mimeType: 'image/png',
+                    orientation: 1,
+                    tags: metaRes.tags,
+                    removedBytes: metaRes.removedBytes
+                  };
+                }
+              }
+            } catch (_) {
+              metaRes = null;
+            }
+          }
+
+          var finalLoaded = null;
+          var effectiveMime = (metaRes && metaRes.mimeType) || file.type || 'image/png';
+          var effectiveSize = file.size;
+          var alreadyBaked = false;
+          var currentSourceBlob = file;
+
+          if (metaRes && (metaRes.needsCanvasStrip || (metaRes.changed && metaRes.orientation > 1))) {
+            var bakedRes = await bakeCleanPixelsFromBlob(file, displayName);
+            finalLoaded = bakedRes.loaded;
+            effectiveMime = bakedRes.baked ? 'image/png' : effectiveMime;
+            effectiveSize = bakedRes.blobSize;
+            alreadyBaked = bakedRes.baked;
+          } else if (metaRes && metaRes.changed) {
+            var strippedBlob = new Blob([metaRes.bytes], { type: effectiveMime });
+            currentSourceBlob = strippedBlob;
+            try {
+              finalLoaded = await loadHtmlImageFromBlob(strippedBlob, displayName);
+              effectiveSize = strippedBlob.size;
+            } catch (_) {
+              var fallbackBaked = await bakeCleanPixelsFromBlob(file, displayName);
+              finalLoaded = fallbackBaked.loaded;
+              effectiveMime = fallbackBaked.baked ? 'image/png' : effectiveMime;
+              effectiveSize = fallbackBaked.blobSize;
+              alreadyBaked = fallbackBaked.baked;
+            }
+          } else {
+            finalLoaded = await loadHtmlImageFromBlob(file, displayName);
+          }
+
+          // 픽셀 알파/RGB LSB에 숨겨진 스텔스 메타데이터(NovelAI stealth_pngcomp 등) 감지 시 제거
+          if (!alreadyBaked && finalLoaded && probeHtmlImageHasStealth(finalLoaded.img)) {
+          // 픽셀 알파/RGB LSB에 숨겨진 스텔스 메타데이터(NovelAI WebP stealth_pngcomp 등) 감지 시 제거
+          if (
+            !alreadyBaked &&
+            !pngStealthChecked &&
+            finalLoaded &&
+            probeHtmlImageHasStealth(finalLoaded.img)
+          ) {
+            var stealthBaked = await bakeCleanPixelsFromBlob(currentSourceBlob, displayName);
+            if (stealthBaked.baked) {
+              URL.revokeObjectURL(finalLoaded.objectUrl);
+              finalLoaded = stealthBaked.loaded;
+              effectiveMime = 'image/png';
+              effectiveSize = stealthBaked.blobSize;
+            }
+          }
+
+          return {
+            uid: Date.now() + '-' + Math.random().toString(36).slice(2, 9),
+            name: displayName,
+            mimeType: effectiveMime,
+            fileSize: effectiveSize,
+            objectUrl: finalLoaded.objectUrl,
+            element: finalLoaded.img,
+            rawWidth: finalLoaded.img.naturalWidth,
+            rawHeight: finalLoaded.img.naturalHeight,
+            rotation: 0,
+            flipX: false,
+            flipY: false,
+            cropPosX: null,
+            cropPosY: null
+          };
         }
 
         function computeAlignOffset(containerSpan, itemSpan, align) {
@@ -3993,15 +5405,16 @@
           var offscreen = document.createElement('canvas');
           var bg = getEffectiveBgColor(format);
           renderPlanToCanvas(offscreen, plan, bg);
+          cleanStealthOnCanvas(offscreen);
 
           var mime = encodeMimeOverride || getFormatMime(format);
           var quality = mime === 'image/png' ? undefined : 1.0;
 
-          var blob = await canvasToBlobAsync(offscreen, mime, quality);
+          var rawBlob = await canvasToBlobAsync(offscreen, mime, quality);
           // 메모리 즉시 반환 유도
           offscreen.width = 0;
           offscreen.height = 0;
-          return blob;
+          return ensureCleanExportBlob(rawBlob);
         }
 
         async function handleDownload(overrideFormat) {
