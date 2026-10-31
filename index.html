@@ -356,6 +356,7 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
+        white-space: nowrap;
       }
 
       .shortcut-dot {
@@ -1798,6 +1799,11 @@
               <span class="shortcut-item">
                 <span id="headerCopyShortcutLabel">PNG 복사</span>
                 <kbd class="ui-kbd">Ctrl+C</kbd>
+              </span>
+              <span class="shortcut-dot">·</span>
+              <span class="shortcut-item">
+                <span>복사+비우기</span>
+                <kbd class="ui-kbd">Ctrl+X</kbd>
               </span>
               <span class="shortcut-dot">·</span>
               <span class="shortcut-item">
@@ -5206,7 +5212,7 @@
           el.downloadBtnKbd.classList.toggle('hidden', state.downloading);
 
           el.copyBtn.disabled = !canExport || state.copying;
-          el.copyBtn.title = '단축키: Ctrl + C (' + fmtLabel + ' 클립보드 복사)';
+          el.copyBtn.title = '단축키: Ctrl + C (' + fmtLabel + ' 클립보드 복사) · Ctrl + X (복사 후 비우기)';
           el.copyBtnIcon.innerHTML = state.copying
             ? ICONS.loader
             : state.copiedRecently
@@ -5543,8 +5549,7 @@
           recomputeAndRender({ rebuildList: true });
         }
 
-        function handleResetAll() {
-          if (state.images.length === 0) return;
+        function clearAllUploadedImages() {
           for (var i = 0; i < state.images.length; i += 1) {
             URL.revokeObjectURL(state.images[i].objectUrl);
           }
@@ -5559,6 +5564,11 @@
           state.dragOverItemIndex = null;
           recomputeAndRender({ rebuildList: true });
           hideCustomTooltip();
+        }
+
+        function handleResetAll() {
+          if (state.images.length === 0) return;
+          clearAllUploadedImages();
           pushToast('이미지 목록을 비웠습니다.', 'info');
         }
 
@@ -5651,6 +5661,7 @@
           try {
             // Safari 등 사용자 제스처 컨텍스트 유지를 위해 Promise<Blob> 우선 전달
             await navigator.clipboard.write([new ClipboardItem(itemMap)]);
+            await blobPromise;
           } catch (firstErr) {
             // Promise<Blob> 미지원 브라우저 폴백
             var resolvedBlob = await blobPromise;
@@ -5660,7 +5671,7 @@
           }
         }
 
-        async function handleCopyClipboard(overrideFormat) {
+        async function handleCopyClipboard(overrideFormat, clearAfterCopy) {
           var plan = state.mergePlan;
           if (!plan || plan.exceedsLimit || state.copying) return;
 
@@ -5698,14 +5709,26 @@
               await writeBlobToClipboard('image/png', buildMergedBlob(targetFormat, 'image/png'));
             }
 
-            state.copiedRecently = true;
-            if (copiedTimerId) window.clearTimeout(copiedTimerId);
-            copiedTimerId = window.setTimeout(function () {
+            if (clearAfterCopy) {
+              if (copiedTimerId) {
+                window.clearTimeout(copiedTimerId);
+                copiedTimerId = null;
+              }
               state.copiedRecently = false;
-              syncExportActionsUI();
-            }, 2000);
+              if (state.images.length > 0) {
+                clearAllUploadedImages();
+              }
+              pushToast(fmtLabel + ' 이미지를 복사하고 목록을 비웠습니다.', 'success');
+            } else {
+              state.copiedRecently = true;
+              if (copiedTimerId) window.clearTimeout(copiedTimerId);
+              copiedTimerId = window.setTimeout(function () {
+                state.copiedRecently = false;
+                syncExportActionsUI();
+              }, 2000);
 
-            pushToast(fmtLabel + ' 이미지가 클립보드에 복사되었습니다.', 'success');
+              pushToast(fmtLabel + ' 이미지가 클립보드에 복사되었습니다.', 'success');
+            }
           } catch (err) {
             pushToast((err && err.message) || '클립보드 복사에 실패했습니다.', 'error');
           } finally {
@@ -6120,7 +6143,7 @@
           handleCopyClipboard();
         });
 
-        // 단축키: Delete (모든 이미지 비우기), Ctrl+S (선택된 저장 포맷 즉시 다운로드), Ctrl+C (선택된 저장 포맷 클립보드 복사)
+        // 단축키: Delete (모든 이미지 비우기), Ctrl+S (선택된 저장 포맷 즉시 다운로드), Ctrl+C (선택된 저장 포맷 클립보드 복사), Ctrl+X (복사 후 모든 이미지 비우기)
         window.addEventListener('keydown', function (e) {
           if (e.isComposing) return;
 
@@ -6163,6 +6186,7 @@
           var keyLower = (e.key || '').toLowerCase();
           var isKeyS = e.code === 'KeyS' || keyLower === 's' || e.key === 'ㄴ';
           var isKeyC = e.code === 'KeyC' || keyLower === 'c' || e.key === 'ㅊ';
+          var isKeyX = e.code === 'KeyX' || keyLower === 'x' || e.key === 'ㅌ';
 
           if (isKeyS) {
             e.preventDefault();
@@ -6182,17 +6206,19 @@
             return;
           }
 
-          if (isKeyC) {
+          if (isKeyC || isKeyX) {
             var activeEl = document.activeElement;
             if (activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement) {
               var hasInputSelection =
-                activeEl.selectionStart !== null &&
-                activeEl.selectionEnd !== null &&
+                typeof activeEl.selectionStart === 'number' &&
+                typeof activeEl.selectionEnd === 'number' &&
                 activeEl.selectionStart !== activeEl.selectionEnd;
               if (hasInputSelection) return;
             }
             var pageSelection = (window.getSelection && window.getSelection().toString()) || '';
-            if (pageSelection.length > 0) return;
+            if (pageSelection.length > 0 && (!isKeyX || (activeEl && activeEl.isContentEditable))) {
+              return;
+            }
 
             e.preventDefault();
             if (e.repeat) return;
@@ -6207,7 +6233,7 @@
               );
               return;
             }
-            handleCopyClipboard();
+            handleCopyClipboard(undefined, isKeyX);
           }
         });
 
