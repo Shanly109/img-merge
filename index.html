@@ -3613,7 +3613,23 @@
           return new Uint8Array(results[0]);
         }
 
-        // PNG IDAT 스트림에서 직접 스텔스 LSB 제거 (프리멀티플라이 알파 반올림 오차조차 없는 100% 비트 무손실)
+        function unfilterPngRowRegion(scanRow, fType, prevRow, currRow, byteCount, bpp) {
+          for (var x = 0; x < byteCount; x += 1) {
+            var raw = scanRow[1 + x];
+            var left = x >= bpp ? currRow[x - bpp] : 0;
+            var up = prevRow ? prevRow[x] : 0;
+            var upLeft = prevRow && x >= bpp ? prevRow[x - bpp] : 0;
+            var val;
+            if (fType === 0) val = raw;
+            else if (fType === 1) val = (raw + left) & 0xff;
+            else if (fType === 2) val = (raw + up) & 0xff;
+            else if (fType === 3) val = (raw + ((left + up) >> 1)) & 0xff;
+            else val = (raw + paethPredictor(left, up, upLeft)) & 0xff;
+            currRow[x] = val;
+          }
+        }
+
+        // PNG IDAT 스트림에서 직접 스텔스 LSB 제거 (상단 152줄 스트리밍 조기 종료 + 100% 비트 무손실)
         async function stripPngPixelStealthBinary(pngBytes) {
           if (
             typeof DecompressionStream === 'undefined' ||
@@ -3690,45 +3706,132 @@
 
           var bpp = colorType === 6 ? 4 : 3;
           var rowBytes = width * bpp;
-          var expectedScanLen = height * (1 + rowBytes);
+          var strideScan = 1 + rowBytes;
+          var expectedScanLen = height * strideScan;
+          var probe = getStealthProbeSize(width, height);
+          var probeRowBytes = probe.probeW * bpp;
+          var probeScanNeed = probe.probeH * strideScan;
 
-          var scanBytes;
+          var compressedIdat =
+            idatParts.length === 1 ? idatParts[0] : concatByteSlices(idatParts, idatTotal);
+
+          var scanChunks = [];
+          var receivedLen = 0;
+          var probeChecked = false;
+          var detections = null;
+
           try {
-            var compressedIdat =
-              idatParts.length === 1 ? idatParts[0] : concatByteSlices(idatParts, idatTotal);
-            scanBytes = await runZlibStream(compressedIdat, 'decompress');
+            var ds = new DecompressionStream('deflate');
+            var writer = ds.writable.getWriter();
+            writer
+              .write(compressedIdat)
+              .then(function () {
+                return writer.close();
+              })
+              .catch(function () {});
+
+            var reader = ds.readable.getReader();
+            while (true) {
+              var step = await reader.read();
+              if (step.value && step.value.byteLength > 0) {
+                var chunkU8 =
+                  step.value instanceof Uint8Array ? step.value : new Uint8Array(step.value);
+                scanChunks.push(chunkU8);
+                receivedLen += chunkU8.byteLength;
+              }
+
+              if (!probeChecked && (receivedLen >= probeScanNeed || step.done)) {
+                probeChecked = true;
+                if (receivedLen < probeScanNeed) {
+                  reader.cancel().catch(function () {});
+                  return { checked: false, changed: false, bytes: pngBytes };
+                }
+
+                var probeScan =
+                  scanChunks.length === 1
+                    ? scanChunks[0]
+                    : concatByteSlices(scanChunks, receivedLen);
+                var probeRgba = new Uint8Array(probe.probeW * probe.probeH * 4);
+                var pPrev = new Uint8Array(probeRowBytes);
+                var pCurr = new Uint8Array(probeRowBytes);
+
+                for (var py = 0; py < probe.probeH; py += 1) {
+                  var pRowOff = py * strideScan;
+                  var pfType = probeScan[pRowOff];
+                  if (pfType > 4) {
+                    reader.cancel().catch(function () {});
+                    return { checked: false, changed: false, bytes: pngBytes };
+                  }
+                  unfilterPngRowRegion(
+                    probeScan.subarray(pRowOff, pRowOff + 1 + probeRowBytes),
+                    pfType,
+                    py > 0 ? pPrev : null,
+                    pCurr,
+                    probeRowBytes,
+                    bpp
+                  );
+
+                  var pDstOff = py * probe.probeW * 4;
+                  if (bpp === 4) {
+                    probeRgba.set(pCurr, pDstOff);
+                  } else {
+                    for (var ppx = 0; ppx < probe.probeW; ppx += 1) {
+                      var ps = ppx * 3;
+                      var pd = pDstOff + ppx * 4;
+                      probeRgba[pd] = pCurr[ps];
+                      probeRgba[pd + 1] = pCurr[ps + 1];
+                      probeRgba[pd + 2] = pCurr[ps + 2];
+                      probeRgba[pd + 3] = 255;
+                    }
+                  }
+
+                  var pTmp = pPrev;
+                  pPrev = pCurr;
+                  pCurr = pTmp;
+                }
+
+                detections = detectStealthInRgba(probeRgba, width, height, probe.probeW);
+                if (detections.length === 0) {
+                  // 스텔스 시그니처가 없으면 나머지 IDAT 해제를 즉시 중단하여 수 ms 내에 종료
+                  reader.cancel().catch(function () {});
+                  return { checked: true, changed: false, bytes: pngBytes };
+                }
+              }
+
+              if (step.done) break;
+            }
           } catch (_) {
             return { checked: false, changed: false, bytes: pngBytes };
           }
 
-          if (scanBytes.length !== expectedScanLen) {
+          if (!detections || detections.length === 0) {
+            return { checked: true, changed: false, bytes: pngBytes };
+          }
+          if (receivedLen !== expectedScanLen) {
             return { checked: false, changed: false, bytes: pngBytes };
           }
 
+          var scanBytes =
+            scanChunks.length === 1 ? scanChunks[0] : concatByteSlices(scanChunks, receivedLen);
           var rgba = new Uint8Array(width * height * 4);
           var rawRowPrev = new Uint8Array(rowBytes);
           var rawRowCurr = new Uint8Array(rowBytes);
 
           for (var y = 0; y < height; y += 1) {
-            var rowStart = y * (1 + rowBytes);
+            var rowStart = y * strideScan;
             var fType = scanBytes[rowStart];
             if (fType > 4) {
               return { checked: false, changed: false, bytes: pngBytes };
             }
 
-            for (var x = 0; x < rowBytes; x += 1) {
-              var raw = scanBytes[rowStart + 1 + x];
-              var left = x >= bpp ? rawRowCurr[x - bpp] : 0;
-              var up = y > 0 ? rawRowPrev[x] : 0;
-              var upLeft = y > 0 && x >= bpp ? rawRowPrev[x - bpp] : 0;
-              var val;
-              if (fType === 0) val = raw;
-              else if (fType === 1) val = (raw + left) & 0xff;
-              else if (fType === 2) val = (raw + up) & 0xff;
-              else if (fType === 3) val = (raw + ((left + up) >> 1)) & 0xff;
-              else val = (raw + paethPredictor(left, up, upLeft)) & 0xff;
-              rawRowCurr[x] = val;
-            }
+            unfilterPngRowRegion(
+              scanBytes.subarray(rowStart, rowStart + strideScan),
+              fType,
+              y > 0 ? rawRowPrev : null,
+              rawRowCurr,
+              rowBytes,
+              bpp
+            );
 
             var rgbaRowOffset = y * width * 4;
             if (bpp === 4) {
@@ -3749,50 +3852,26 @@
             rawRowCurr = tmp;
           }
 
-          var detections = detectStealthInRgba(rgba, width, height, width);
-          if (detections.length === 0) {
-            return { checked: true, changed: false, bytes: pngBytes };
-          }
-
           wipeStealthInRgba(rgba, width, height, detections);
 
+          // 메모리 내 임시 디코딩용이므로 Filter 0(None + 네이티브 TypedArray.set 복사)으로 JS 루프 부하를 제거
           var outScan = new Uint8Array(expectedScanLen);
-          var prevOutRow = new Uint8Array(rowBytes);
-          var currOutRow = new Uint8Array(rowBytes);
-
           for (var oy = 0; oy < height; oy += 1) {
+            var outRowStart = oy * strideScan;
+            outScan[outRowStart] = 0;
             var srcRgbaOff = oy * width * 4;
             if (bpp === 4) {
-              currOutRow.set(rgba.subarray(srcRgbaOff, srcRgbaOff + rowBytes));
+              outScan.set(rgba.subarray(srcRgbaOff, srcRgbaOff + rowBytes), outRowStart + 1);
             } else {
+              var outDataStart = outRowStart + 1;
               for (var opx = 0; opx < width; opx += 1) {
                 var osIdx = srcRgbaOff + opx * 4;
-                var odIdx = opx * 3;
-                currOutRow[odIdx] = rgba[osIdx];
-                currOutRow[odIdx + 1] = rgba[osIdx + 1];
-                currOutRow[odIdx + 2] = rgba[osIdx + 2];
+                var odIdx = outDataStart + opx * 3;
+                outScan[odIdx] = rgba[osIdx];
+                outScan[odIdx + 1] = rgba[osIdx + 1];
+                outScan[odIdx + 2] = rgba[osIdx + 2];
               }
             }
-
-            var outRowStart = oy * (1 + rowBytes);
-            var usePaeth = oy > 0;
-            outScan[outRowStart] = usePaeth ? 4 : 1;
-            for (var ox = 0; ox < rowBytes; ox += 1) {
-              var curVal = currOutRow[ox];
-              var oLeft = ox >= bpp ? currOutRow[ox - bpp] : 0;
-              if (!usePaeth) {
-                outScan[outRowStart + 1 + ox] = (curVal - oLeft) & 0xff;
-              } else {
-                var oUp = prevOutRow[ox];
-                var oUpLeft = ox >= bpp ? prevOutRow[ox - bpp] : 0;
-                outScan[outRowStart + 1 + ox] =
-                  (curVal - paethPredictor(oLeft, oUp, oUpLeft)) & 0xff;
-              }
-            }
-
-            var swapRow = prevOutRow;
-            prevOutRow = currOutRow;
-            currOutRow = swapRow;
           }
 
           var recompressed;
@@ -3883,6 +3962,7 @@
           return { loaded: cleanLoaded, blobSize: cleanBlob.size, baked: true };
         }
 
+        // 업로드 즉시 렌더링을 위해 파일 디코딩만 먼저 수행 (메타데이터/스텔스 정리는 화면 표시 직후 백그라운드에서 비동기 처리)
         async function decodeImageFile(file) {
           var displayName = file.name || 'clipboard-image.png';
           var isImage =
@@ -3891,11 +3971,39 @@
             throw new Error('이미지 파일이 아닙니다: ' + displayName);
           }
 
+          var loaded = await loadHtmlImageFromBlob(file, displayName);
+          return {
+            uid: Date.now() + '-' + Math.random().toString(36).slice(2, 9),
+            name: displayName,
+            mimeType: file.type || 'image/png',
+            fileSize: file.size,
+            objectUrl: loaded.objectUrl,
+            element: loaded.img,
+            rawWidth: loaded.img.naturalWidth,
+            rawHeight: loaded.img.naturalHeight,
+            rotation: 0,
+            flipX: false,
+            flipY: false,
+            cropPosX: null,
+            cropPosY: null,
+            rawFile: file,
+            sanitizePromise: null
+          };
+        }
+
+        async function sanitizeImageItem(item) {
+          var file = item.rawFile;
+          item.rawFile = null;
+          if (!file || state.images.indexOf(item) === -1) return;
+
+          var displayName = item.name;
           var metaRes = null;
           var pngStealthChecked = false;
+
           if (typeof file.arrayBuffer === 'function') {
             try {
               var rawBuffer = await file.arrayBuffer();
+              if (state.images.indexOf(item) === -1) return;
               metaRes = stripImageMetadataBuffer(rawBuffer, file.type, displayName);
               if (
                 metaRes &&
@@ -3904,6 +4012,7 @@
                 metaRes.orientation <= 1
               ) {
                 var pngStealth = await stripPngPixelStealthBinary(metaRes.bytes);
+                if (state.images.indexOf(item) === -1) return;
                 pngStealthChecked = pngStealth.checked;
                 if (pngStealth.changed) {
                   metaRes = {
@@ -3922,66 +4031,100 @@
             }
           }
 
-          var finalLoaded = null;
-          var effectiveMime = (metaRes && metaRes.mimeType) || file.type || 'image/png';
-          var effectiveSize = file.size;
+          if (state.images.indexOf(item) === -1) return;
+
+          var cleanLoaded = null;
+          var effectiveMime = (metaRes && metaRes.mimeType) || item.mimeType;
+          var effectiveSize = item.fileSize;
           var alreadyBaked = false;
           var currentSourceBlob = file;
 
           if (metaRes && (metaRes.needsCanvasStrip || (metaRes.changed && metaRes.orientation > 1))) {
             var bakedRes = await bakeCleanPixelsFromBlob(file, displayName);
-            finalLoaded = bakedRes.loaded;
-            effectiveMime = bakedRes.baked ? 'image/png' : effectiveMime;
+            if (!bakedRes.baked) {
+              URL.revokeObjectURL(bakedRes.loaded.objectUrl);
+              return;
+            }
+            cleanLoaded = bakedRes.loaded;
+            effectiveMime = 'image/png';
             effectiveSize = bakedRes.blobSize;
-            alreadyBaked = bakedRes.baked;
+            alreadyBaked = true;
           } else if (metaRes && metaRes.changed) {
             var strippedBlob = new Blob([metaRes.bytes], { type: effectiveMime });
             currentSourceBlob = strippedBlob;
             try {
-              finalLoaded = await loadHtmlImageFromBlob(strippedBlob, displayName);
+              cleanLoaded = await loadHtmlImageFromBlob(strippedBlob, displayName);
               effectiveSize = strippedBlob.size;
             } catch (_) {
               var fallbackBaked = await bakeCleanPixelsFromBlob(file, displayName);
-              finalLoaded = fallbackBaked.loaded;
-              effectiveMime = fallbackBaked.baked ? 'image/png' : effectiveMime;
+              if (!fallbackBaked.baked) {
+                URL.revokeObjectURL(fallbackBaked.loaded.objectUrl);
+                return;
+              }
+              cleanLoaded = fallbackBaked.loaded;
+              effectiveMime = 'image/png';
               effectiveSize = fallbackBaked.blobSize;
-              alreadyBaked = fallbackBaked.baked;
+              alreadyBaked = true;
             }
-          } else {
-            finalLoaded = await loadHtmlImageFromBlob(file, displayName);
           }
 
-          // 픽셀 알파/RGB LSB에 숨겨진 스텔스 메타데이터(NovelAI WebP stealth_pngcomp 등) 감지 시 제거
+          if (state.images.indexOf(item) === -1) {
+            if (cleanLoaded) URL.revokeObjectURL(cleanLoaded.objectUrl);
+            return;
+          }
+
+          var checkTargetImg = cleanLoaded ? cleanLoaded.img : item.element;
           if (
             !alreadyBaked &&
             !pngStealthChecked &&
-            finalLoaded &&
-            probeHtmlImageHasStealth(finalLoaded.img)
+            checkTargetImg &&
+            probeHtmlImageHasStealth(checkTargetImg)
           ) {
             var stealthBaked = await bakeCleanPixelsFromBlob(currentSourceBlob, displayName);
             if (stealthBaked.baked) {
-              URL.revokeObjectURL(finalLoaded.objectUrl);
-              finalLoaded = stealthBaked.loaded;
+              if (cleanLoaded) URL.revokeObjectURL(cleanLoaded.objectUrl);
+              cleanLoaded = stealthBaked.loaded;
               effectiveMime = 'image/png';
               effectiveSize = stealthBaked.blobSize;
+            } else {
+              URL.revokeObjectURL(stealthBaked.loaded.objectUrl);
             }
           }
 
-          return {
-            uid: Date.now() + '-' + Math.random().toString(36).slice(2, 9),
-            name: displayName,
-            mimeType: effectiveMime,
-            fileSize: effectiveSize,
-            objectUrl: finalLoaded.objectUrl,
-            element: finalLoaded.img,
-            rawWidth: finalLoaded.img.naturalWidth,
-            rawHeight: finalLoaded.img.naturalHeight,
-            rotation: 0,
-            flipX: false,
-            flipY: false,
-            cropPosX: null,
-            cropPosY: null
-          };
+          if (!cleanLoaded) return;
+
+          if (state.images.indexOf(item) === -1) {
+            URL.revokeObjectURL(cleanLoaded.objectUrl);
+            return;
+          }
+
+          var oldUrl = item.objectUrl;
+          item.objectUrl = cleanLoaded.objectUrl;
+          item.element = cleanLoaded.img;
+          item.mimeType = effectiveMime;
+          item.fileSize = effectiveSize;
+
+          var thumbEl = el.imageList.querySelector('img[data-img-uid="' + item.uid + '"]');
+          if (thumbEl) {
+            thumbEl.src = cleanLoaded.objectUrl;
+          }
+          URL.revokeObjectURL(oldUrl);
+
+          if (state.mergePlan && state.mergePlan.placements) {
+            for (var p = 0; p < state.mergePlan.placements.length; p += 1) {
+              if (state.mergePlan.placements[p].uid === item.uid) {
+                state.mergePlan.placements[p].element = cleanLoaded.img;
+              }
+            }
+          }
+        }
+
+        function ensureItemSanitized(item) {
+          if (!item) return Promise.resolve();
+          if (!item.sanitizePromise) {
+            item.sanitizePromise = sanitizeImageItem(item).catch(function () {});
+          }
+          return item.sanitizePromise;
         }
 
         function computeAlignOffset(containerSpan, itemSpan, align) {
@@ -4781,7 +4924,9 @@
               '<div class="thumb-box ' +
               checkerClass +
               '">' +
-              '<img src="' +
+              '<img data-img-uid="' +
+              escapeHtml(img.uid) +
+              '" src="' +
               escapeHtml(img.objectUrl) +
               '" alt="' +
               escapeHtml(img.name) +
@@ -5269,15 +5414,29 @@
           var files = Array.from(fileList || []);
           if (files.length === 0) return false;
 
+          var settled = await Promise.all(
+            files.map(function (file) {
+              return decodeImageFile(file).then(
+                function (item) {
+                  return { ok: true, item: item };
+                },
+                function (err) {
+                  return {
+                    ok: false,
+                    message: (err && err.message) || file.name + ' 로드 실패'
+                  };
+                }
+              );
+            })
+          );
+
           var decoded = [];
           var errors = [];
-
-          for (var i = 0; i < files.length; i += 1) {
-            try {
-              var item = await decodeImageFile(files[i]);
-              decoded.push(item);
-            } catch (err) {
-              errors.push((err && err.message) || files[i].name + ' 로드 실패');
+          for (var i = 0; i < settled.length; i += 1) {
+            if (settled[i].ok) {
+              decoded.push(settled[i].item);
+            } else {
+              errors.push(settled[i].message);
             }
           }
 
@@ -5300,6 +5459,18 @@
           }
 
           recomputeAndRender({ rebuildList: true });
+
+          // 화면에 즉시 표시한 뒤 다음 프레임 유휴 시점에 백그라운드에서 순차적으로 메타데이터/스텔스 제거
+          window.requestAnimationFrame(function () {
+            window.setTimeout(function () {
+              (async function () {
+                for (var s = 0; s < decoded.length; s += 1) {
+                  await ensureItemSanitized(decoded[s]);
+                }
+              })();
+            }, 0);
+          });
+
           return true;
         }
 
@@ -5392,6 +5563,17 @@
         }
 
         async function buildMergedBlob(format, encodeMimeOverride) {
+          if (!state.mergePlan) {
+            throw new Error('합칠 이미지를 먼저 추가해 주세요.');
+          }
+          if (state.mergePlan.exceedsLimit) {
+            throw new Error(state.mergePlan.limitReason || '캔버스 최대 해상도를 초과했습니다.');
+          }
+
+          if (state.images.length > 0) {
+            await Promise.all(state.images.map(ensureItemSanitized));
+          }
+
           var plan = state.mergePlan;
           if (!plan) {
             throw new Error('합칠 이미지를 먼저 추가해 주세요.');
