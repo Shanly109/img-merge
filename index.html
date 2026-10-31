@@ -3951,8 +3951,6 @@
             finalLoaded = await loadHtmlImageFromBlob(file, displayName);
           }
 
-          // 픽셀 알파/RGB LSB에 숨겨진 스텔스 메타데이터(NovelAI stealth_pngcomp 등) 감지 시 제거
-          if (!alreadyBaked && finalLoaded && probeHtmlImageHasStealth(finalLoaded.img)) {
           // 픽셀 알파/RGB LSB에 숨겨진 스텔스 메타데이터(NovelAI WebP stealth_pngcomp 등) 감지 시 제거
           if (
             !alreadyBaked &&
